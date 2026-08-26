@@ -1,0 +1,40 @@
+{
+  "plugin": "devpost-hackathon",
+  "version": 2,
+  "hackathon": {
+    "slug": "webmcp",
+    "name": "The WebMCP Challenge",
+    "url": "https://webmcp.devpost.com/",
+    "selected": true,
+    "source": "known"
+  },
+  "participant": {
+    "name": "",
+    "display_name": "Nostro Ce"
+  },
+  "project": {
+    "name": "Verdiqt",
+    "summary": "An evidence-first SaaS idea validation cockpit where a person and an agent judge the same live trial together.",
+    "ai_usage": "Planned and being implemented: OpenAI Responses will support citation-backed web research, idea normalization, evidence classification, and schema-validated scoring and verdict rationales. OpenAI embeddings will retrieve original Verdiqt playbook passages from pgvector. Human approvals, evidence controls, citations, and code-enforced limits constrain model use.",
+    "codex_usage": "Codex is the lead build collaborator. It reconciled the founder brief, requirements, architecture, WebMCP contracts, security gates, and implementation plan; scaffolded the pinned application; built and visually checked the first Verdiqt UI; and will implement sequenced slices, tests, deployment checks, and submission preparation."
+  },
+  "current_stage": "resources",
+  "completed_stages": [
+    "start-hackathon",
+    "review",
+    "resources"
+  ],
+  "rules_acknowledged": true,
+  "learning": {
+    "status": "not-started",
+    "current_step": "",
+    "completed_steps": [],
+    "plan_file": "",
+    "checklist_file": ""
+  },
+  "submission": {
+    "draft_file": "devpost-submission.md",
+    "status": "not-started"
+  },
+  "next_command": "prepare-submission"
+}

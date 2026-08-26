@@ -1,0 +1,28 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated output
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+coverage/
+.cache/
+.playwright-cli/
+output/playwright/
+tmp/
+
+# Test and tooling output
+playwright-report/
+test-results/
+*.log
+*.tsbuildinfo
+
+# Editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
+*.swp

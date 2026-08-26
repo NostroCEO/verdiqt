@@ -1,0 +1,13 @@
+packages:
+  - "."
+
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true
+
+# Task 1 uses package versions verified directly against the npm registry.
+# The challenge window requires same-day framework security backports.
+minimumReleaseAge: 0
