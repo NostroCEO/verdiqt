@@ -4,6 +4,7 @@ import { runIdSchema } from "@/lib/webmcp/tools/schemas";
 
 export const getVerdictTool: ModelContextTool = {
   name: "get_verdict",
+  route: "GET /api/trials/:id/verdict",
   description:
     "Get the full scored verdict for a completed trial: composite score, BUILD or PIVOT or KILL, six dimension scores with rationales and evidence citations, and the recommended next step.",
   inputSchema: {

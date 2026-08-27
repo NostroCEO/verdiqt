@@ -4,6 +4,7 @@ import { runIdSchema } from "@/lib/webmcp/tools/schemas";
 
 export const getValidationStatusTool: ModelContextTool = {
   name: "get_validation_status",
+  route: "GET /api/trials/:id/status",
   description:
     "Get the current status, progress, pending approvals, and recent human actions for a validation trial. Call again after the human changes evidence, weights, or an approval. Statuses: QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, FAILED.",
   inputSchema: {

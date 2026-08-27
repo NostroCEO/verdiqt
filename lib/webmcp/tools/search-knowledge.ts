@@ -10,6 +10,7 @@ import { dimensionSchema } from "@/lib/webmcp/tools/schemas";
 
 export const searchKnowledgeTool: ModelContextTool = {
   name: "search_knowledge",
+  route: "GET /api/knowledge/search",
   description:
     "Search Verdiqt's marketing and validation knowledge base for frameworks and heuristics, for example offer design, demand signals, pricing, distribution.",
   inputSchema: {

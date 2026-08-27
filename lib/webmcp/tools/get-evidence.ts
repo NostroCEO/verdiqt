@@ -13,6 +13,7 @@ import {
 
 export const getEvidenceTool: ModelContextTool = {
   name: "get_evidence",
+  route: "GET /api/trials/:id/evidence",
   description:
     "List evidence gathered for a trial. Optionally filter by dimension or source. Includes the human's pinned or rejected state per item.",
   inputSchema: {

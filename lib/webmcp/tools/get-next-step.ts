@@ -4,6 +4,7 @@ import { runIdSchema } from "@/lib/webmcp/tools/schemas";
 
 export const getNextStepTool: ModelContextTool = {
   name: "get_next_step",
+  route: "GET /api/trials/:id/next-step",
   description:
     "Get the single recommended next validation action for a completed trial, chosen from Verdiqt's validation playbook.",
   inputSchema: {

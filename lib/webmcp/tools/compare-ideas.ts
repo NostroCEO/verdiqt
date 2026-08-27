@@ -3,6 +3,7 @@ import { fetchApi, recordFrom } from "@/lib/webmcp/tools/api";
 
 export const compareIdeasTool: ModelContextTool = {
   name: "compare_ideas",
+  route: "POST /api/trials/compare",
   description: "Compare two or more completed trials side by side across all six dimensions.",
   inputSchema: {
     type: "object",

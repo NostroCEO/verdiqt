@@ -3,6 +3,7 @@ import { fetchApi, stringField } from "@/lib/webmcp/tools/api";
 
 export const analyzeRepoTool: ModelContextTool = {
   name: "analyze_repo",
+  route: "POST /api/portfolio/analyze",
   description:
     "Start a validation trial from one of the signed-in user's repositories. Uses the repo's README and metadata to infer the idea.",
   inputSchema: {

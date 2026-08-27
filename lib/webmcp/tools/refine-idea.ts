@@ -9,6 +9,7 @@ import { runIdSchema } from "@/lib/webmcp/tools/schemas";
 
 export const refineIdeaTool: ModelContextTool = {
   name: "refine_idea",
+  route: "POST /api/trials/:id/refine",
   description:
     "Re-run validation on a pivoted version of an existing idea. Creates a new linked trial so the two can be compared with compare_ideas.",
   inputSchema: {

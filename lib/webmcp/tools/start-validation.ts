@@ -3,6 +3,7 @@ import { fetchApi, optionalStringField } from "@/lib/webmcp/tools/api";
 
 export const startValidationTool: ModelContextTool = {
   name: "start_validation",
+  route: "POST /api/trials",
   description:
     "Start a validation trial for a SaaS idea. Provide either idea_text describing the idea, or repo_url pointing to a public GitHub repository. Returns a run_id to poll with get_validation_status.",
   inputSchema: {

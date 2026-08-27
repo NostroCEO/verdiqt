@@ -10,6 +10,7 @@ import { dimensionSchema, runIdSchema } from "@/lib/webmcp/tools/schemas";
 
 export const requestDeepScanTool: ModelContextTool = {
   name: "request_deep_scan",
+  route: "POST /api/trials/:id/deep-scan-requests",
   description:
     "Request a deeper evidence scan for one dimension of a trial. This queues an approval card in the page UI; the human must click Approve before the scan runs. Poll get_validation_status to see when it completes.",
   inputSchema: {
