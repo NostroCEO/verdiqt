@@ -1,9 +1,13 @@
 import { Gavel } from "lucide-react";
 
-import { TechnologyStack } from "@/components/landing/technology-stack";
+import { AgentSandbox } from "@/components/landing/agent-sandbox";
+import { ClosingBand } from "@/components/landing/closing-band";
 import { LandingHero } from "@/components/landing/landing-hero";
+import { ProceduralRecord } from "@/components/landing/procedural-record";
+import { TechnologyStack } from "@/components/landing/technology-stack";
 import { TrialDashboard } from "@/components/landing/trial-demo";
 import { Badge } from "@/components/ui/badge";
+import { SITE } from "@/lib/site";
 
 export default function Home() {
   return (
@@ -25,11 +29,14 @@ export default function Home() {
             aria-label="Primary navigation"
             className="hidden items-center gap-8 font-mono text-xs uppercase tracking-[0.08em] text-muted-foreground md:flex"
           >
-            <a className="transition-colors hover:text-foreground" href="#technology-stack-title">
-              The stack
+            <a className="transition-colors hover:text-foreground" href="#procedural-record">
+              The record
             </a>
-            <a className="transition-colors hover:text-foreground" href="#how-it-works">
-              Dashboard
+            <a className="transition-colors hover:text-foreground" href="#trial-preview">
+              The proceeding
+            </a>
+            <a className="transition-colors hover:text-foreground" href="#agent-access">
+              Agent access
             </a>
           </nav>
 
@@ -46,44 +53,42 @@ export default function Home() {
       </header>
 
       <LandingHero />
-      <TechnologyStack />
+      <ProceduralRecord />
+
+      <div className="mx-auto w-full max-w-[80rem] border-x border-b border-border/90 px-6 py-5 sm:px-10">
+        <p className="font-mono text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          <span className="mr-2 text-primary">[03]</span>
+          The proceeding
+          <span className="ml-3 normal-case tracking-normal text-foreground/70">
+            The live trial workspace. Phase 1 opens with your case.
+          </span>
+        </p>
+      </div>
       <TrialDashboard />
 
-      <section className="border-y border-border/80 bg-card/35 px-5 py-14 sm:px-8 lg:px-10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Built for the agentic web
-            </p>
-            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
-              The agent shares the room. You keep the gavel.
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Its actions stay narrow, structured, approval-aware, and in sync
-              with the human-visible case state.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {["Read case state", "Propose actions", "Request approval", "Return structured results"].map(
-              (item) => (
-                <span
-                  key={item}
-                  className="rounded-full border border-border bg-background/55 px-3 py-2 text-xs font-medium text-muted-foreground"
-                >
-                  {item}
-                </span>
-              ),
-            )}
-          </div>
-        </div>
-      </section>
+      <AgentSandbox />
+      <TechnologyStack />
+      <ClosingBand />
 
-      <footer className="px-5 py-8 text-sm text-muted-foreground sm:px-8 lg:px-10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="border-t border-border/90 px-5 py-8 text-sm text-muted-foreground sm:px-8 lg:px-10">
+        <div className="mx-auto flex max-w-[80rem] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span>Verdiqt. Build what deserves to live.</span>
-          <span className="inline-flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-build" />
-            System build in progress
+          <span className="flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[0.68rem] uppercase tracking-[0.08em]">
+            <span>{SITE.license} licensed</span>
+            {SITE.repoUrl ? (
+              <a
+                className="transition-colors hover:text-foreground"
+                href={SITE.repoUrl}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Source
+              </a>
+            ) : null}
+            <span className="inline-flex items-center gap-2 normal-case tracking-normal">
+              <span className="size-1.5 rounded-full bg-build" />
+              System build in progress
+            </span>
           </span>
         </div>
       </footer>

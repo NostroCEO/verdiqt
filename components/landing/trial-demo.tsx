@@ -16,6 +16,51 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useSyncExternalStore } from "react";
+import {
+  getAgentChannelSnapshot,
+  getAgentChannelServerSnapshot,
+  subscribeAgentChannel,
+} from "@/lib/webmcp/bus";
+
+// T5.2: the panel mirrors the provider's real registration state instead of
+// hardcoded copy. One line per state, dashboard rail is one of exactly two
+// status surfaces on the page (the other is the footer).
+function AgentChannelPanel() {
+  const snapshot = useSyncExternalStore(
+    subscribeAgentChannel,
+    getAgentChannelSnapshot,
+    getAgentChannelServerSnapshot,
+  );
+
+  const line = (() => {
+    switch (snapshot.state) {
+      case "checking":
+        return "Agent channel: checking browser";
+      case "unsupported":
+        return "Agent channel: no agent client in this browser";
+      case "registering":
+        return "Agent channel: registering tools";
+      case "registered":
+        return `Agent channel: ${snapshot.totalCount} tools registered`;
+      case "partial":
+        return `Agent channel: ${snapshot.registeredCount} of ${snapshot.totalCount} tools registered`;
+      case "failed":
+        return "Agent channel: registration error";
+    }
+  })();
+
+  return (
+    <div className="border-t border-border p-3">
+      <p className="font-mono text-[0.48rem] uppercase tracking-[0.08em] text-muted-foreground">
+        Agent channel
+      </p>
+      <p aria-live="polite" className="mt-2 text-xs leading-5 text-foreground">
+        {line}
+      </p>
+    </div>
+  );
+}
 
 const phases = [
   { id: "intake", number: "01", label: "Intake" },
@@ -312,15 +357,7 @@ export function TrialDashboard() {
                 <SystemRow icon={Database} label="Postgres" value="Not connected" />
                 <SystemRow icon={Activity} label="Worker" value="Not connected" />
               </ul>
-              <div className="border-t border-border p-3">
-                <p className="font-mono text-[0.48rem] uppercase tracking-[0.08em] text-muted-foreground">
-                  Agent channel
-                </p>
-                <p className="mt-2 text-xs leading-5 text-foreground">Not registered yet.</p>
-                <p className="mt-1 text-[0.65rem] leading-4 text-muted-foreground">
-                  The real tool registry attaches after the trial APIs exist.
-                </p>
-              </div>
+              <AgentChannelPanel />
             </aside>
           </div>
         </div>

@@ -48,12 +48,34 @@ const technologies = [
   },
 ] as const;
 
+// Entrance phases: "static" (SSR and already-visible-at-mount: fully shown,
+// never hidden), "hidden" (measured below the viewport after mount), and
+// "revealed" (entrance plays once). Content must never REST at opacity 0:
+// a judge's screenshot at any scroll position has to look complete.
+type EntrancePhase = "static" | "hidden" | "revealed";
+
 export function TechnologyStack() {
   const sectionRef = useRef<HTMLElement>(null);
-  const isInView = useInView(sectionRef, { amount: 0.25 });
+  const isInView = useInView(sectionRef, { amount: 0.2 });
   const reduceMotion = useReducedMotion() === true;
   const [activeTechnology, setActiveTechnology] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [entrance, setEntrance] = useState<EntrancePhase>("static");
+
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || reduceMotion) return;
+
+    if (section.getBoundingClientRect().top >= window.innerHeight) {
+      setEntrance("hidden");
+    }
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    if (isInView) {
+      setEntrance((current) => (current === "hidden" ? "revealed" : current));
+    }
+  }, [isInView]);
 
   useEffect(() => {
     if (reduceMotion || paused || !isInView) return;
@@ -98,10 +120,17 @@ export function TechnologyStack() {
           {technologies.map((technology, index) => (
             <motion.li
               key={technology.name}
-              initial={{ opacity: 0, y: 8 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, amount: 0.55 }}
-              transition={{ delay: index * 0.055, duration: 0.28 }}
+              initial={false}
+              animate={
+                entrance === "hidden"
+                  ? { opacity: 0, y: 8 }
+                  : { opacity: 1, y: 0 }
+              }
+              transition={
+                entrance === "revealed"
+                  ? { delay: index * 0.055, duration: 0.28 }
+                  : { duration: 0 }
+              }
               className="group relative flex min-h-36 flex-col items-center justify-center gap-4 overflow-hidden bg-background px-5 py-7 text-center"
             >
               {activeTechnology === index ? (

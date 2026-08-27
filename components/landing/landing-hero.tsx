@@ -18,8 +18,8 @@ const modes: Array<{
 }> = [
   {
     id: "repo",
-    label: "Public GitHub repo",
-    helper: "PUBLIC REPOSITORIES ONLY. LIVE RESEARCH IS NOT CONNECTED YET.",
+    label: "GitHub repo",
+    helper: "PASTE A PUBLIC GITHUB.COM OWNER/REPOSITORY URL.",
     placeholder: "https://github.com/you/your-saas",
   },
   {
@@ -56,41 +56,37 @@ function isGitHubRepository(value: string) {
   }
 }
 
+// One finite verdict tap: the gavel enters raised, swings down, strikes the
+// base (which takes a small jolt at impact), and settles static. Reduced
+// motion collapses the transforms to a plain fade via MotionConfig.
 function HalftoneGavel() {
   return (
     <div className="relative flex min-h-[28rem] w-full items-center justify-center overflow-hidden lg:min-h-full">
       <div className="editorial-crosshair" aria-hidden="true" />
       <motion.div
         aria-hidden="true"
-        initial={{ opacity: 0, scale: 0.92, rotate: -3 }}
-        animate={{ opacity: 1, scale: 1, rotate: 0 }}
-        transition={{ duration: 0.72, ease: "easeOut" }}
+        initial={{ opacity: 0, scale: 0.94 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.45, ease: "easeOut" }}
         className="editorial-gavel"
       >
-        <motion.span
-          className="editorial-gavel-head"
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.14, duration: 0.45 }}
-        />
-        <motion.span
-          className="editorial-gavel-handle"
-          initial={{ opacity: 0, scaleY: 0.6 }}
-          animate={{ opacity: 1, scaleY: 1 }}
-          transition={{ delay: 0.24, duration: 0.5 }}
-        />
-        <motion.span
-          className="editorial-gavel-base"
-          initial={{ opacity: 0, scaleX: 0.7 }}
-          animate={{ opacity: 1, scaleX: 1 }}
-          transition={{ delay: 0.36, duration: 0.42 }}
-        />
+        <motion.div
+          className="absolute inset-0"
+          style={{ transformOrigin: "62% 78%" }}
+          initial={{ rotate: -16 }}
+          animate={{ rotate: [-16, -16, 6, 0] }}
+          transition={{ duration: 1.15, times: [0, 0.4, 0.74, 1], ease: "easeInOut" }}
+        >
+          <span className="editorial-gavel-head" />
+          <span className="editorial-gavel-handle" />
+        </motion.div>
+        <span className="editorial-gavel-base" />
       </motion.div>
 
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.58, duration: 0.35 }}
+        transition={{ delay: 1.05, duration: 0.35 }}
         className="absolute bottom-8 left-8 font-mono text-[0.68rem] uppercase tracking-[0.14em] text-muted-foreground lg:bottom-10 lg:left-10"
       >
         <p>TRIAL PROTOCOL 001</p>
@@ -103,9 +99,7 @@ function HalftoneGavel() {
 export function LandingHero() {
   const [mode, setMode] = useState<IntakeMode>("repo");
   const [value, setValue] = useState("");
-  const [feedback, setFeedback] = useState(
-    "PHASE 1 PREVIEW ONLY. LIVE RESEARCH IS NOT CONNECTED YET.",
-  );
+  const [feedback, setFeedback] = useState("");
   const [hasError, setHasError] = useState(false);
 
   const activeMode = modes.find((item) => item.id === mode) ?? modes[0];
@@ -114,11 +108,7 @@ export function LandingHero() {
     setMode(nextMode);
     setValue("");
     setHasError(false);
-    setFeedback(
-      nextMode === "repo"
-        ? "PUBLIC REPOSITORIES ONLY. LIVE RESEARCH IS NOT CONNECTED YET."
-        : "WRITE ONE CLEAR SENTENCE. LIVE RESEARCH IS NOT CONNECTED YET.",
-    );
+    setFeedback("");
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -191,9 +181,9 @@ export function LandingHero() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.06, duration: 0.48 }}
-              className="mt-8 max-w-[38rem] text-[3.5rem] font-medium leading-[1.02] tracking-[-0.055em] sm:text-[4.15rem]"
+              className="mt-8 max-w-[38rem] text-[clamp(2.5rem,4.6vw,3.75rem)] font-medium leading-[1.13] tracking-normal"
             >
-              Put the idea on trial before you build it.
+              Put your SaaS idea on trial before you build it.
             </motion.h1>
 
             <motion.p
@@ -230,7 +220,7 @@ export function LandingHero() {
                       aria-controls="trial-intake-panel"
                       onClick={() => selectMode(item.id)}
                       className={cn(
-                        "relative min-h-11 border-r border-border px-3 font-mono text-[0.7rem] uppercase tracking-[0.1em] outline-none transition-colors last:border-r-0 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                        "relative min-h-11 border-r border-border px-3 font-mono text-sm font-medium uppercase tracking-[0.07em] outline-none transition-colors last:border-r-0 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                       selected
                           ? "bg-foreground text-background"
                           : "bg-background text-muted-foreground hover:text-foreground",
@@ -281,7 +271,7 @@ export function LandingHero() {
                   <Button
                     type="submit"
                     size="lg"
-                    className="cut-action h-12 min-w-[12rem] rounded-none px-5 font-mono text-xs uppercase tracking-[0.08em]"
+                    className="cut-action h-12 min-w-[12rem] rounded-none px-5 font-mono text-sm font-medium uppercase tracking-[0.07em]"
                   >
                     Open the case
                     <ArrowRight data-icon="inline-end" />

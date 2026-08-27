@@ -34,8 +34,9 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --font-sans: var(--font-inter);
-  --font-heading: var(--font-inter);
+  --font-sans: var(--font-geist);
+  --font-heading: var(--font-geist);
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
@@ -117,7 +118,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-inter), sans-serif;
+    font-family: var(--font-geist), sans-serif;
   }
 
   ::selection {
@@ -289,10 +290,19 @@
   display: block;
   background-image: radial-gradient(
     circle,
-    color-mix(in srgb, var(--foreground) 72%, transparent) 0 2.2px,
-    transparent 2.5px
+    color-mix(in srgb, var(--foreground) 88%, transparent) 0 1.7px,
+    transparent 2px
   );
-  background-size: 11px 11px;
+  background-size: 8px 8px;
+}
+
+/* Accent highlight band across the head's upper third; the parent clip-path
+   keeps it inside the halftone silhouette. */
+.editorial-gavel-head::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 62% 0;
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
 }
 
 .editorial-gavel-head {
