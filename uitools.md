@@ -8,7 +8,7 @@ This file is the implementation contract for the UI stack already selected in `C
 |---|---|---|---|
 | Theme, spacing, layout, responsive behavior | Tailwind plus CSS variables | All screens | Product colors come from `app/globals.css`. Do not hard-code colors in components. |
 | Accessible UI primitives | shadcn/ui | Buttons, cards, dialogs, popovers, tabs, accordions, sliders, toasts, badges, inputs, and skeletons | shadcn/ui is the primitive layer, not the chart or motion layer. |
-| Product UI motion | Motion | Landing DOM hero, repository CTA, selected technology wall, compact trial proceeding, agent dock, evidence entrances, verdict reveal, page transitions, and reduced-motion variants | Motion owns application and DOM animation. Do not add another general-purpose animation library. |
+| Product UI motion | Motion | Landing DOM hero, repository CTA, selected technology wall, agent dock, evidence entrances, verdict reveal, page transitions, and reduced-motion variants | Motion owns animated application and DOM transitions. The embedded landing dashboard is deliberately static and contains no Motion. Do not add another general-purpose animation library. |
 | Charts | Bklit | Gauge, radar, bar, line, and portfolio heatmap | Bklit owns every data chart. Do not introduce a competing chart library. |
 | Named visual accents | KokonutUI | Verdict score number ticker and portfolio winner spotlight only | Do not use KokonutUI as a second general component system. |
 | Optional isolated hero choreography | anime.js | A future signature 3D moment only | Motion owns all landing DOM animation. Do not add anime.js unless the optional 3D moment passes Gate 3. |
@@ -35,6 +35,8 @@ Run shadcn initialization after the root Next.js 15 App Router scaffold is in pl
 These gates are mandatory because the source documents select the products but do not establish every current package or registry identifier.
 
 ### Gate 1: Bklit registry identifiers
+
+Status on 2026-08-27: verified for the current Section 2 dashboard slice. The official registry URL is `https://ui.bklit.com/r/{name}.json`; the exact installed identifiers are `@bklit/gauge-chart` and `@bklit/radar-chart`. Both components use the documented composable APIs, responsive sizing, token colors, and Motion-based enter animation. Bar, line, and heatmap identifiers remain deferred until their owning product screens need them.
 
 The plan records this intended command:
 
@@ -91,9 +93,9 @@ Inter is fixed for UI text. The display face is specified as Playfair Display or
 
 ### Motion
 
-- Landing DOM entrances, the repository/idea switch, the selected technology wall, and the compact interactive proceeding use Motion.
+- Landing DOM entrances, the repository/idea switch, and the selected technology wall use Motion. The embedded trial dashboard is static application chrome and does not use Motion.
 - The technology wall advances its active block every 2.4 seconds. Pause the timer on hover and while the wall is outside the viewport. Reduced motion shows a static active block.
-- The compact trial proceeding uses three horizontal 40 px controls above one persistent product frame and advances every 4.8 seconds. Pause on hover, while keyboard focus is inside the section, and while the section is outside the viewport. Keep Arrow, Home, End, and direct tab selection. A valid hero submission resets stage one and scrolls to the frame. Reduced motion shows a static first stage and uses immediate scrolling. Do not add Replay, Simulated, or equivalent playback controls.
+- The embedded trial dashboard uses three horizontal 40 px controls above one persistent application frame. It never autoplays, loops, or uses Motion. Before the real pipeline exists, only Phase 1 is active and Phases 2 and 3 remain disabled. After Task 11, persisted worker state and SSE events unlock phases. A valid hero submission loads Phase 1 and scrolls to the frame. Dashboard state changes and scrolling are immediate. Do not add Replay, Simulated, or equivalent playback controls.
 - Agent dock open: spring with stiffness 260, damping 24, scale 0.6 to 1, origin at bottom right.
 - Evidence cards: 40 ms stagger with a 12 px vertical fade-spring entrance.
 - Verdict reveal: dim evidence, sweep gauge and ticker, draw radar, drop stamp, then slide up the next-step card. Keep the full sequence under three seconds and skippable on click.
@@ -117,10 +119,10 @@ Inter is fixed for UI text. The display face is specified as Playfair Display or
 
 ### Landing hero
 
-- Motion coordinates the DOM hero, repository CTA, halftone scene entrance, selected technology wall, and compact proceeding.
+- Motion coordinates the DOM hero, repository CTA, halftone scene entrance, and selected technology wall. It does not run inside the embedded trial dashboard.
 - The hero uses flat editorial fields, strict one-pixel rails, square modules, mono system labels, and an original CSS halftone gavel. Do not copy reference-site source, SVG paths, logos, customer marks, or exact copy.
 - The technology wall uses official transparent marks for OpenAI, Next.js, Prisma, and Render only. It identifies selected production technologies and does not imply sponsorship, endorsement, customer status, or challenge-supporter integration. Do not add marks for unintegrated products.
-- Until the backend trial route exists, "Open the case" remains a preview interaction and must not claim a trial was created. When the backend is available and launch gates are closed, both the human CTA and `start_validation` use the shared `POST /api/trials` route. The CTA navigates only after the server returns a real run identifier and dashboard URL.
+- Until the backend trial route exists, "Open the case" remains a Phase 1 intake preview and must not claim a trial was created, research ran, or a verdict exists. When the backend is available and launch gates are closed, both the human CTA and `start_validation` use the shared `POST /api/trials` route. The CTA navigates only after the server returns a real run identifier and dashboard URL.
 - anime.js and Three.js remain optional for one later isolated 3D moment. If added, load both only in that scene using dynamic imports.
 - Keep the hero chunk under 300 KB gzipped.
 - Keep the existing halftone scene as the deliberate WebGL-free and reduced-motion-safe experience.
@@ -130,7 +132,7 @@ Inter is fixed for UI text. The display face is specified as Playfair Display or
 
 | Screen or component | Primitive and styling | Motion | Data visual |
 |---|---|---|---|
-| Landing | Tailwind plus shadcn input and button | Motion for DOM hero, CTA, technology wall, and compact proceeding | Optional isolated Three.js scene only |
+| Landing | Tailwind plus shadcn input and button | Motion for DOM hero, CTA, and technology wall; no Motion inside the embedded dashboard | Optional isolated Three.js scene only |
 | Trial evidence stream | shadcn cards and badges | Motion staggered entries | None |
 | Verdict panel | shadcn accordion and cards | Motion reveal plus verified KokonutUI ticker | Bklit gauge, radar, and bar |
 | Agent dock | shadcn buttons and cards | Motion springs and activity entries | Bklit line chart in expanded state |
@@ -149,8 +151,8 @@ Inter is fixed for UI text. The display face is specified as Playfair Display or
 - Muted text combinations pass WCAG AA.
 - Reduced-motion behavior is exercised for the dock, evidence stream, verdict reveal, and hero.
 - The technology active block advances every 2.4 seconds and pauses on hover or when offscreen.
-- The compact proceeding advances every 4.8 seconds and pauses on hover, focus within, or when offscreen.
-- Reduced motion leaves the technology wall and proceeding static, with no autoplay timer.
+- The embedded trial dashboard contains no animation or autoplay timer. Only real backend state can advance it beyond Phase 1.
+- Reduced motion leaves the technology wall static and makes trial-state transitions immediate.
 - The landing contains no Replay or Simulated playback control.
 - Only the four selected technology marks appear in the technology wall. No unpermitted or unintegrated supporter mark is present.
 - The CTA does not claim successful trial creation until the real shared API route returns success.

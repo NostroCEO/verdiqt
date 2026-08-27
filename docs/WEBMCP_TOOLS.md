@@ -62,6 +62,7 @@ Rules for every tool:
 - WebMCP does not require an MCP transport envelope. Do not require `structuredContent`, `content`, or a shared result-wrapper helper in the baseline implementation. If a required live client later proves it needs a compatibility transform, isolate that transform at the registry boundary and record the verified behavior without changing the route contracts.
 - Evidence objects in tool results always include their `url` field populated; ChatGPT builds citations only from non-empty url strings, and cited evidence is part of the product's credibility story.
 - Tool descriptions are written for agents: verb-first, concrete, and they state preconditions (for example that `request_deep_scan` requires human approval in the page).
+- Client-side unavailability shape: when a route is unreachable or returns non-JSON (for example before the backend deploys), tool handlers return `{ error: "api_unavailable", status, hint }` synthesized in `lib/webmcp/tools/api.ts`. This is intentional and distinct from the server error shapes below; Task 11 contract tests must treat it as the expected pre-live response.
 - When WebMCP is absent, the provider renders nothing and the site works normally; a small dismissible banner suggests opening the site in an agent-capable browser.
 
 ## Authoritative state reads
@@ -77,7 +78,7 @@ All input schemas below are JSON Schema. Server-side, the matching API route val
 ### 1. start_validation
 
 - Description: "Start a validation trial for a SaaS idea. Provide either idea_text describing the idea, or repo_url pointing to a public GitHub repository. Returns a run_id to poll with get_validation_status."
-- Input: `{ "type": "object", "properties": { "idea_text": { "type": "string", "minLength": 1, "maxLength": 2000 }, "repo_url": { "type": "string", "format": "uri" } }, "oneOf": [{ "required": ["idea_text"], "not": { "required": ["repo_url"] } }, { "required": ["repo_url"], "not": { "required": ["idea_text"] } }], "additionalProperties": false }`
+- Input: `{ "type": "object", "properties": { "idea_text": { "type": "string", "minLength": 1, "maxLength": 2000 }, "repo_url": { "type": "string", "format": "uri" } }, "oneOf": [{ "properties": { "idea_text": {}, "repo_url": false }, "required": ["idea_text"] }, { "properties": { "idea_text": false, "repo_url": {} }, "required": ["repo_url"] }], "additionalProperties": false }`
 - Calls: `POST /api/trials` body `{ ideaText?, repoUrl? }`
 - Returns: `{ run_id, status, dashboard_url }`
 - Errors: 429 with `{ error: "rate_limited", retry_hint }` when the anonymous limit is hit.
@@ -88,7 +89,7 @@ All input schemas below are JSON Schema. Server-side, the matching API route val
 - Description: "Get the current status, progress, pending approvals, and recent human actions for a validation trial. Call again after the human changes evidence, weights, or an approval. Statuses: QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, FAILED."
 - Input: `{ "type": "object", "properties": { "run_id": { "type": "string" } }, "required": ["run_id"], "additionalProperties": false }`
 - Calls: `GET /api/trials/:id/status`
-- Returns: `{ run_id, status, evidence_count, stages_done, latest_events: [...last 5 TrialEvents...], pending_approvals: [{ approval_id, kind, state, dimension? }], human_actions: [...last 10 human TrialEvents...] }`
+- Returns: `{ run_id, status, evidence_count, stages_done, latest_events: [...last 5 TrialEvents...], pending_approvals: [{ approval_id, kind, state, dimension? }], human_actions: [...last 10 human TrialEvents...] }`. The implementation additionally returns `pipeline_revision`, `completed_revision`, `composite_score`, `verdict`, `created_at`, and `completed_at` (all snake_case, additive). Event rows expose only whitelisted payload keys (`revision`, `dimension`, `source`, `stage`); worker payloads never pass through verbatim.
 
 ### 3. get_evidence
 
