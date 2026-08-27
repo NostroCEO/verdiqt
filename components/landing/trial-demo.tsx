@@ -148,7 +148,7 @@ export function TrialDashboard({
         }
       : {
           caseLabel: "No case loaded",
-          sourceLabel: "Open a case from the home page",
+          sourceLabel: "File a case above",
           inputType: "repo",
           hasInput: false,
         },
@@ -173,18 +173,15 @@ export function TrialDashboard({
   function returnToIntake() {
     const input = document.getElementById("trial-input");
 
-    // The intake lives on the landing hero; from the courtroom page this
-    // navigates home instead of scrolling to a control that is not there.
+    // Both pages carry a filing control with this id (hero on /, the
+    // courtroom intake on /trial); scroll to whichever hosts us.
     if (!input) {
       window.location.assign("/#top");
       return;
     }
 
-    input.focus();
-    document.getElementById("top")?.scrollIntoView({
-      behavior: "auto",
-      block: "start",
-    });
+    input.scrollIntoView({ behavior: "auto", block: "center" });
+    input.focus({ preventScroll: true });
   }
 
   return (

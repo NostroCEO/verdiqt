@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { AgentSandbox } from "@/components/landing/agent-sandbox";
+import { CourtroomIntake } from "@/components/courtroom-intake";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { TrialDashboard } from "@/components/landing/trial-demo";
@@ -27,6 +28,7 @@ export default function TrialPage() {
           </span>
         </p>
       </div>
+      <CourtroomIntake />
       <Suspense fallback={<TrialDashboard />}>
         <TrialWorkspace />
       </Suspense>

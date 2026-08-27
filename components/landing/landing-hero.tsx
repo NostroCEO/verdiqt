@@ -7,9 +7,8 @@ import { ArrowRight, Check, FolderGit2, Lightbulb } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { caseNameFrom, isGitHubRepository, type IntakeMode } from "@/lib/intake";
 import { cn } from "@/lib/utils";
-
-type IntakeMode = "repo" | "idea";
 
 const modes: Array<{
   id: IntakeMode;
@@ -30,32 +29,6 @@ const modes: Array<{
     placeholder: "A decision cockpit for founders who ship too early",
   },
 ];
-
-function getRepoName(value: string) {
-  const parts = value.replace(/\/$/, "").split("/");
-  return parts.at(-1) || "your-saas";
-}
-
-function isGitHubRepository(value: string) {
-  try {
-    const normalized = value.startsWith("http") ? value : "https://" + value;
-    const url = new URL(normalized);
-    const parts = url.pathname.split("/").filter(Boolean);
-
-    return (
-      (url.hostname === "github.com" || url.hostname === "www.github.com") &&
-      (url.protocol === "https:" || url.protocol === "http:") &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      !url.search &&
-      !url.hash &&
-      parts.length === 2
-    );
-  } catch {
-    return false;
-  }
-}
 
 // One finite verdict tap: the gavel enters raised, swings down, strikes the
 // base (which takes a small jolt at impact), and settles static. Reduced
@@ -133,10 +106,7 @@ export function LandingHero() {
       return;
     }
 
-    const caseName =
-      mode === "repo"
-        ? getRepoName(trimmed)
-        : trimmed.split(/\s+/).slice(0, 4).join(" ");
+    const caseName = caseNameFrom(mode, trimmed);
 
     setHasError(false);
     setFeedback("CASE " + caseName.toUpperCase() + " OPENED. ENTERING THE COURTROOM.");
