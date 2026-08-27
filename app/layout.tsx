@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
+import { WebMCPProvider } from "@/components/webmcp-provider";
+
 import "./globals.css";
 
 const inter = Inter({
@@ -22,6 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${inter.variable} min-h-screen antialiased`}>
+        <WebMCPProvider />
         {children}
       </body>
     </html>
