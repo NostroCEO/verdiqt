@@ -13,14 +13,11 @@ import {
 import { prisma } from "@/lib/db";
 import { enqueueTrial } from "@/lib/queue";
 
-export const DEFAULT_TRIAL_WEIGHTS: Record<Dimension, number> = {
-  PROBLEM_SEVERITY: 20,
-  DEMAND_SIGNALS: 20,
-  COMPETITION: 15,
-  MONETIZATION: 20,
-  DISTRIBUTION: 15,
-  BUILD_COST: 10,
-};
+import { DEFAULT_WEIGHTS } from "@/lib/verdict/weights";
+
+// Canonical weights live in lib/verdict/weights.ts; this alias keeps the
+// trial-creation API stable.
+export const DEFAULT_TRIAL_WEIGHTS: Record<Dimension, number> = DEFAULT_WEIGHTS;
 
 export type StartTrialInput = {
   ideaText?: string;
