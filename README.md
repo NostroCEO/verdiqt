@@ -18,7 +18,7 @@ Validation is naturally a dialogue between research and judgment. WebMCP lets bo
 
 - The **agent** (in ChatGPT's in-app browser, or Chrome with WebMCP enabled) discovers 12 registered tools covering the whole journey: starting trials, reading evidence, requesting gated deep scans, fetching verdicts, testing pivots, comparing ideas, sweeping a GitHub portfolio, and querying the marketing knowledge base.
 - The **human** sees everything stream into the dashboard live, and acts: one-click approvals for expensive operations, pin and reject on evidence, weight sliders on the scoring.
-- The **page context** flows back: the agent sees the human's actions (pins, rejections, weight changes, approvals) and adapts its analysis in the same session.
+- The **authoritative trial state** flows back through explicit reads: the agent re-checks persisted pins, rejections, weight changes, and approvals, then adapts its analysis in the same session.
 
 That two-way loop, tools one way and human actions the other, is something neither a chatbot nor a dashboard can do alone.
 

@@ -6,7 +6,7 @@ Design language, tokens, motion specs, and screen inventory. The tool-by-tool in
 
 Hard-edged, dark-first, confident. The product delivers verdicts, so the UI borrows judicial gravity through oversized typography, strict one-pixel rails, square modules, mono protocol labels, deliberate negative space, and finite motion. Avoid soft gradient orbs, glowing full-page grids, glass cards, pill-heavy dashboards, and generic AI visual language. Verdict colors stay sparse and appear only on verdict-bearing marks. Never playful-cute; occasionally witty in copy.
 
-The landing may reinterpret public layout and pacing patterns from reference sites, but all Verdiqt copy, SVG geometry, halftone artwork, code, and product UI must remain original. Never copy customer marks, third-party illustrations, exact SVG paths, or proprietary source.
+The landing may reinterpret public layout and pacing patterns from reference sites, but all Verdiqt copy, SVG geometry, halftone artwork, code, and product UI must remain original. Never copy customer marks, third-party illustrations, exact SVG paths, or proprietary source. The selected technology wall is the narrow exception for third-party marks: use only official transparent assets for OpenAI, Next.js, Prisma, and Render, identify them as technologies in the selected production path, and never imply sponsorship or endorsement. Do not add supporter or partner marks for products that are not part of the implementation.
 
 ## Tokens
 
@@ -29,7 +29,7 @@ Typography: Inter (UI) + a high-contrast serif for verdict stamps and section di
 
 ## Screen inventory
 
-1. Landing `app/page.tsx`: rail-bound editorial hero with an original halftone gavel, one-line promise, accessible public-repository or idea switch, "Open the case" CTA, official WebMCP Challenge supporter attribution, interactive three-step proceeding, and agent-capable banner when WebMCP is detected. Motion owns DOM choreography. The CTA remains explicitly local-only until Task 11 connects trial creation.
+1. Landing `app/page.tsx`: rail-bound editorial hero with an original halftone gavel, one-line promise, accessible public-repository or idea switch, "Open the case" CTA, selected technology wall, and one compact three-step product proceeding. The proceeding uses three 40 px horizontal controls above one persistent hard-edged product frame, not stacked explanation cards or a second feature dossier. The technology wall uses official transparent marks for OpenAI, Next.js, Prisma, and Render only. Motion owns DOM choreography. Until the backend exists, a valid CTA submission dispatches the local preview-start event, scrolls smoothly to the proceeding, resets it to stage one, and must not claim that a case or trial was created. Once the backend exists and the launch gates are closed, the CTA starts a real trial through the same `POST /api/trials` route used by the WebMCP tool, then navigates only after a successful response.
 2. Trial dashboard `trial/[id]/page.tsx`: the core screen.
    - Header: idea one-liner, status pill, weights popover (six sliders summing to 100).
    - Evidence stream: masonry of evidence cards streaming in live (SSE), each card: source icon, title, snippet, dimension chip, strength dots, pin and reject buttons.
@@ -50,7 +50,9 @@ Typography: Inter (UI) + a high-contrast serif for verdict stamps and section di
 
 ## Motion principles
 
-- Landing entrances and SVG path drawing use Motion, remain finite, and settle into a static composition. The proceeding changes only on user selection or explicit replay.
+- Landing entrances and SVG path drawing use Motion, remain finite, and settle into a static composition.
+- The selected technology wall advances one active block every 2.4 seconds. Pause while the wall is hovered or outside the viewport. With reduced motion, keep one static active block and do not run the timer.
+- The compact three-stage proceeding advances every 4.8 seconds inside one persistent product frame. Active controls transition in about 300 ms and stage scenes enter in roughly 500 ms. Pause while the section is hovered, contains keyboard focus, or is outside the viewport. Direct stage selection remains available. A valid hero submission resets the sequence to stage one before smooth scrolling to it. With reduced motion, keep the first stage static and use immediate scrolling. Do not render Replay, Simulated, or equivalent playback controls.
 - Evidence cards: staggered entrance, 40 ms stagger, y 12px fade-spring, via Motion.
 - Verdict reveal sequence (on COMPLETE): 1) evidence stream dims, 2) gauge sweeps from 0 to score (Bklit gauge with KokonutUI number ticker, 1.2 s ease-out), 3) radar draws in, 4) verdict stamp drops with a spring scale from 1.4 and a 1-frame screen shake at 4px amplitude, 5) next-step card slides up. Total under 3 seconds, skippable on click.
 - Page transitions minimal. Never animate layout on data refresh except entries.
@@ -70,4 +72,5 @@ All charts use the token palette; verdict colors only on verdict-bearing marks. 
 
 - Desktop-first (judges use the ChatGPT desktop app), fully responsive down to 375px: dashboard collapses to single column, dock becomes full-width bottom sheet.
 - Keyboard reachable approvals: approval cards focusable, Enter approves.
+- Auto-cycling landing sections pause for the documented hover, focus, and viewport conditions. The three proceeding controls remain in one row at 375 px, retain keyboard access, and introduce no horizontal overflow. Manual tabs do not depend on a playback control.
 - Contrast: all text pairs pass WCAG AA against their surfaces (verify the muted text tokens).

@@ -84,6 +84,14 @@ The Task 2 preview Blueprint defines the web service and database only. Render B
   docs/                this documentation kit
 ```
 
+## WebMCP registration lifecycle and state model
+
+The client registry uses the current imperative API at `document.modelContext`. `WebMCPProvider` owns one `AbortController` per mounted registration lifecycle, awaits `registerTool(tool, { signal })` for every tool, and aborts the controller during cleanup so route changes, remounts, and React development behavior do not leave duplicate registrations. The callback's separate execution `AbortSignal` is forwarded to same-origin API fetches so cancelled calls stop cleanly. A `navigator.modelContext` fallback is not part of the baseline architecture; it may exist only as an isolated legacy branch after a required live client demonstrates the need and the exception is recorded.
+
+Tool callbacks return the parsed serializable application result directly. The browser WebMCP API does not require the backend MCP `structuredContent` plus `content` transport envelope, so the client has no mandatory result-wrapper layer. Any compatibility transform later proven necessary by a target client stays inside `lib/webmcp/registry.ts` and does not change server route contracts.
+
+Persisted routes remain the only source of truth; the registry does not publish a separate model-context snapshot. `get_validation_status` returns current progress, pending approvals, five latest events, and at most the last 10 human actions. After a human pin, rejection, weight change, approval, or denial, an agent calls that status tool again and uses the evidence or verdict read tools for updated domain data. This explicit read loop keeps the agent and visible dashboard consistent without a parallel state channel.
+
 ## Data model (Prisma)
 
 Copy this schema verbatim into `prisma/schema.prisma` (Task 3 of docs/PLAN.md).
@@ -404,7 +412,7 @@ const rows = await prisma.$queryRaw`
 
 ## Identity, ownership, and capabilities
 
-Auth.js v5 uses the JWT session strategy without a database adapter. The GitHub OAuth callback upserts the project's custom `User` row by `githubLogin`, then writes `User.id` into the encrypted, integrity-protected Auth.js JWT. The provider access token may be retained in that server-readable JWT for GitHub API calls, but the `session` callback exposes only `user.id`, `name`, and `avatarUrl` to client code. No GitHub token or Auth.js JWT is written to the custom `User` table, returned by an API route, or included in WebMCP context.
+Auth.js v5 uses the JWT session strategy without a database adapter. The GitHub OAuth callback upserts the project's custom `User` row by `githubLogin`, then writes `User.id` into the encrypted, integrity-protected Auth.js JWT. The provider access token may be retained in that server-readable JWT for GitHub API calls, but the `session` callback exposes only `user.id`, `name`, and `avatarUrl` to client code. No GitHub token or Auth.js JWT is written to the custom `User` table, returned by an API route, or included in a WebMCP tool result.
 
 An unsigned-in browser receives a random 256-bit `verdiqt_anon` capability in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. Only its SHA-256 hash is stored in `AnonymousSession`. Creating an anonymous trial creates or reuses that session, records `Trial.anonymousSessionId`, and extends a bounded expiry. On sign-in, the auth callback transfers that browser session's trials and pending approvals to the authenticated `User` in one transaction, then rotates and expires the anonymous capability.
 
@@ -412,7 +420,7 @@ Every trial, evidence, verdict, stream, mutation, and approval route calls the s
 
 ## Persistent approval ownership and routes
 
-Approval requests are durable `Approval` rows, not transient `TrialEvent` payloads. `TrialEvent` mirrors each transition for SSE and agent context, while `Approval` remains authoritative. A deterministic `dedupeKey` includes owner, kind, target, `requestedRevision`, and action-defining payload fields such as dimension or maximum repository count. Display-only fields such as reason are excluded, so repeated agent calls return the existing pending approval rather than stacking cards.
+Approval requests are durable `Approval` rows, not transient `TrialEvent` payloads. `TrialEvent` mirrors each transition for SSE and agent status reads, while `Approval` remains authoritative. A deterministic `dedupeKey` includes owner, kind, target, `requestedRevision`, and action-defining payload fields such as dimension or maximum repository count. Display-only fields such as reason are excluded, so repeated agent calls return the existing pending approval rather than stacking cards.
 
 Route responsibilities are intentionally split:
 
@@ -423,7 +431,7 @@ Route responsibilities are intentionally split:
 - The approve route atomically changes `PENDING_HUMAN_APPROVAL` to `APPROVED` with a conditional update. Exactly one successful transition creates the relevant `PipelineRun` or portfolio work request. Duplicate clicks return the existing state and do not enqueue twice.
 - Only the worker changes `APPROVED` to `RUNNING`, then to `COMPLETED` or `FAILED`. Expiry cleanup changes untouched pending rows to `EXPIRED`.
 
-Page context derives `pendingApprovals` from `Approval` rows and derives recent `humanActions` from `TrialEvent`. This keeps the visible approval card, API response, and agent-visible context consistent after reloads and across multiple tabs.
+The trial status route derives `pending_approvals` from `Approval` rows and recent `human_actions` from `TrialEvent`. This keeps the visible approval card, API response, and agent-visible status read consistent after reloads and across multiple tabs.
 
 ## Secure judge access
 

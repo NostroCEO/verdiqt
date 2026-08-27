@@ -21,7 +21,7 @@ If code and documentation conflict, fix both in the same change. Append new dura
 
 ## Project
 
-Verdiqt is an agent-native SaaS idea validation app for the WebMCP Challenge. Its judged centerpiece is the two-way collaboration loop: the agent researches and proposes, the human approves and curates, and page context tells the agent what the human did.
+Verdiqt is an agent-native SaaS idea validation app for the WebMCP Challenge. Its judged centerpiece is the two-way collaboration loop: the agent researches and proposes, the human approves and curates, and the agent re-reads persisted trial status and human actions through the registered read tools.
 
 The locked stack is strict TypeScript, Next.js 15 App Router without a `src/` directory, Node 22, pnpm, Prisma, pg-boss, Postgres with pgvector, Auth.js, OpenAI Responses and embeddings, zod, vitest, and Render web, worker, cron, and database services.
 

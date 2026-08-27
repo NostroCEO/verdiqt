@@ -36,7 +36,7 @@ Cut triggers, in order:
 
 1. Cron is optional and cut first.
 2. If the deployed collaboration loop is not green by August 30 at 6:00 pm, cut GitHub OAuth and the portfolio UI. Keep the three portfolio tool contracts as typed unavailable responses so the 12-tool registry claim remains truthful.
-3. If the core experience is not feature-complete by August 31 at noon, cut nonessential 3D, KokonutUI, and extra-chart polish. Preserve approvals, human-action context, cited verdicts, accessibility, and both-client testing.
+3. If the core experience is not feature-complete by August 31 at noon, cut nonessential 3D, KokonutUI, and extra-chart polish. Preserve approvals, agent-readable human-action status, cited verdicts, accessibility, and both-client testing.
 4. No new scope after the August 31 feature freeze.
 
 ## Founder Gates
@@ -208,7 +208,7 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 
 **Interfaces:**
 - Consumes: everything from Tasks 4 to 10.
-- Produces: every endpoint exactly as specified per tool in docs/WEBMCP_TOOLS.md (paths, payloads, error shapes). Plus UI-only endpoints: PATCH evidence `{ humanState: "PINNED"|"REJECTED"|"NEUTRAL" }` and PUT weights `{ weights }`, both emitting TrialEvents, creating a revisioned RESCORE PipelineRun, and returning `{ pipelineRevision }` so the dashboard can reopen SSE. `resolvePrincipal()` creates or resolves the secure anonymous capability or Auth.js user, and `requireTrialAccess()` makes unknown and foreign IDs indistinguishable. `checkRateLimit(ipHash)` uses an atomic RateLimitHit upsert. `POST /api/judge-access` exchanges a form-only code for the narrowly scoped signed bypass cookie described in docs/ARCHITECTURE.md; no URL query accepts the code.
+- Produces: every endpoint exactly as specified per tool in docs/WEBMCP_TOOLS.md (paths, payloads, error shapes). The status endpoint includes current pending approvals and at most the last 10 human actions so agents can re-read authoritative state after page actions. Plus UI-only endpoints: PATCH evidence `{ humanState: "PINNED"|"REJECTED"|"NEUTRAL" }` and PUT weights `{ weights }`, both emitting TrialEvents, creating a revisioned RESCORE PipelineRun, and returning `{ pipelineRevision }` so the dashboard can reopen SSE. `resolvePrincipal()` creates or resolves the secure anonymous capability or Auth.js user, and `requireTrialAccess()` makes unknown and foreign IDs indistinguishable. `checkRateLimit(ipHash)` uses an atomic RateLimitHit upsert. `POST /api/judge-access` exchanges a form-only code for the narrowly scoped signed bypass cookie described in docs/ARCHITECTURE.md; no URL query accepts the code.
 
 - [ ] **Step 1:** Write failing security tests first: anonymous capability A cannot read or mutate capability B's trial; a run ID, IP hash, and judge cookie alone grant no access; failed judge exchange is rate limited; the judge cookie bypasses only trial-creation limits; the RateLimitHit increment is atomic. Implement access, CSRF, judge exchange, and rate limiting to green.
 - [ ] **Step 2:** Implement pipeline stages with leased, revisioned PipelineRun claims and deterministic event/evidence upserts. Deep scans re-run GATHERING for one dimension with expanded queries. A stale revision becomes SUPERSEDED and cannot overwrite a newer result.
@@ -219,18 +219,18 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 ### Task 12: WebMCP registry and core tools
 
 **Files:**
-- Create: `lib/webmcp/registry.ts`, `lib/webmcp/tool-result.ts`, `lib/webmcp/tools/` (one file per tool, tools 1 to 8 + 12), `components/webmcp-provider.tsx`, `components/agent-banner.tsx`.
+- Create: `lib/webmcp/registry.ts`, `lib/webmcp/tools/` (one file per tool, tools 1 to 8 + 12), `components/webmcp-provider.tsx`, `components/agent-banner.tsx`.
 - Modify: `app/layout.tsx` (mount provider).
 
 **Interfaces:**
 - Consumes: the API routes from Task 11.
-- Produces: `getModelContext()` (feature-detect per docs/WEBMCP_TOOLS.md), `toToolResult(obj)` (dual format), `registerAllTools(ctx: AppContextSnapshot)` and `publishContext(snapshot)` where `type AppContextSnapshot = { currentTrialId?: string; status?: string; compositeScore?: number|null; verdict?: string|null; pendingApprovals: Array<{approvalId: string; kind: string; state: "PENDING_HUMAN_APPROVAL"; dimension?: string}>; humanActions: Array<{kind: string; at: string; [k: string]: unknown}> }`.
+- Produces: `getModelContext()` with `document.modelContext` as the primary entry point and `registerAllTools(modelContext, signal: AbortSignal): Promise<void>`. Tool callbacks return parsed serializable application results directly and receive an execution signal for same-origin fetch cancellation. The provider owns the registration controller and aborts it during cleanup.
 
-- [ ] **Step 1:** FIRST verify the live API shape in Chrome 149+ with the flag: open any page, inspect `navigator.modelContext` in DevTools (Application panel has a WebMCP section per https://developer.chrome.com/docs/devtools/application/webmcp ). Record findings in docs/STATE.md.
-- [ ] **Step 2:** Implement registry + toToolResult exactly per docs/WEBMCP_TOOLS.md. Each tool file exports `{ name, description, inputSchema, execute }`; execute calls the API route with fetch and returns `toToolResult(json)`, passing API error JSON through as the result so agents can read it.
-- [ ] **Step 3:** Provider: registers tools on mount, re-publishes context on a `verdiqt:context` custom window event; dashboard dispatches that event on every state change. Banner per docs/UI_DESIGN.md when no modelContext.
-- [ ] **Step 4:** Unit-test tool schemas: every inputSchema is valid JSON Schema (ajv compile in a vitest test) and matches the zod validators' accepted shapes for the happy path.
-- [ ] **Step 5:** On the deployed URL, confirm discovery, dual-format results, `start_validation`, and page context in both Chrome with the flag and ChatGPT's in-app browser. Record any client-specific compatibility adjustment in docs/STATE.md. Commit only after both pass: `feat: webmcp registry with core tools and page context`.
+- [ ] **Step 1:** FIRST verify the live API shape in both required clients: inspect `document.modelContext` and the registered tools in the current DevTools WebMCP surface. Treat `navigator.modelContext` as deprecated legacy compatibility and add a fallback only if a required live client lacks the current entry point; record that exact exception in docs/STATE.md.
+- [ ] **Step 2:** Implement the registry exactly per docs/WEBMCP_TOOLS.md. Each tool file exports `{ name, description, inputSchema, annotations?, execute }`; execute calls the API route with fetch, forwards the callback's `AbortSignal`, and returns parsed success or API error JSON directly so agents can read it. Do not add an MCP `structuredContent` or `content` wrapper unless live-client testing proves a compatibility adapter is required.
+- [ ] **Step 3:** Provider: create one `AbortController` on mount, await every `document.modelContext.registerTool(tool, { signal })`, and abort the controller during effect cleanup. Handle registration failures visibly in development and avoid duplicate registrations under remounts. Render the banner per docs/UI_DESIGN.md when no model context is available.
+- [ ] **Step 4:** Unit-test tool schemas and lifecycle: every inputSchema is valid JSON Schema (ajv compile in a vitest test) and matches the zod validators' accepted shapes for the happy path; aborting provider cleanup removes its registrations; cancelling an execution aborts the request; direct object and scalar results remain serializable.
+- [ ] **Step 5:** On the deployed URL, confirm discovery, direct serializable results, `start_validation`, registration cleanup, and a refreshed `get_validation_status` result after a human action in both Chrome with the flag and ChatGPT's in-app browser. Record any client-specific compatibility adjustment in docs/STATE.md. Commit only after both pass: `feat: webmcp registry with core tools and status reads`.
 
 ### Task 13: Trial dashboard
 
@@ -253,7 +253,7 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 
 **Interfaces:**
 - Consumes: TrialEvents (agent_tool_call, deep_scan_requested, rank requests), Motion springs per docs/UI_DESIGN.md.
-- Produces: the dock component mounted on trial and portfolio pages; page-owned approval controls atomically transition persistent Approval rows, enqueue the gated work exactly once, and emit `human_approved` or `human_denied`; a deep-scan approval response includes the new `pipelineRevision` for SSE reopening; context re-publishes on every human action.
+- Produces: the dock component mounted on trial and portfolio pages; page-owned approval controls atomically transition persistent Approval rows, enqueue the gated work exactly once, and emit `human_approved` or `human_denied`; a deep-scan approval response includes the new `pipelineRevision` for SSE reopening; every human action appears in the next authoritative status read.
 
 - [ ] **Step 1:** Tool executes also POST a lightweight `agent_tool_call` event (fire-and-forget) so the feed shows agent activity with friendly labels ("Agent requested evidence for MONETIZATION").
 - [ ] **Step 2:** Build dock states (collapsed with unread badge, open 360x480, expanded 520) with the specified springs; approval cards with Approve/Deny, keyboard reachable.
@@ -279,14 +279,14 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 ### Task 16: Landing page and hero
 
 **Files:**
-- Existing foundation: `app/page.tsx`, `components/landing/{landing-hero,challenge-supporters,trial-demo}.tsx`.
+- Existing foundation: `app/page.tsx`, `components/landing/{landing-hero,technology-stack,trial-demo}.tsx`, `public/brands/`.
 - Modify after Task 11: connect intake to the real trial API and dashboard route.
 
 **Interfaces:**
 - Consumes: Motion for DOM choreography. anime.js and Three.js remain optional for one isolated dynamically imported scene after the `uitools.md` Gate 3 verification.
-- Produces: landing per docs/UI_DESIGN.md screen 1; after Task 11, input submits POST /api/trials and routes to the dashboard.
+- Produces: landing per docs/UI_DESIGN.md screen 1. The current preview validates input, dispatches `verdiqt:preview-start`, scrolls to the compact proceeding, and launches its three visual stages without claiming live research. After Task 11, input submits `POST /api/trials` through the same route as `start_validation` and routes only after the server returns a real run identifier and dashboard URL.
 
-- [x] **Step 1:** Build the original hard-edged editorial landing foundation with a repository-first local preview, CSS halftone gavel, official challenge supporter attribution, and interactive three-stage proceeding. Validate at 1440 x 1000, 375 x 812, and reduced motion in Playwright.
+- [x] **Step 1:** Build the original hard-edged editorial landing foundation with a repository-first local preview, CSS halftone gavel, selected technology wall, and compact three-stage proceeding. The valid CTA scrolls to the preview and launches all three stages. Validate at 1440 x 1000, 375 x 812, keyboard navigation, launch sequencing, and reduced motion in Playwright.
 - [ ] **Step 2:** After Task 11, connect the intake to `POST /api/trials`, preserve local validation and accessibility, and route successful creation to the dashboard. Review copy with the em dash `rg` check.
 - [ ] **Optional Step 3:** Only if the founder requests an isolated 3D moment and the bundle budget permits it, complete `uitools.md` Gate 3, install exact anime.js and Three.js versions, and retain the current CSS halftone experience as the fallback.
 - [ ] **Step 4:** Run Lighthouse on the deployed landing: performance 85+ and hero chunk under 300 KB gzipped. Commit the connected final landing.
@@ -330,4 +330,4 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 
 ## Self-review notes (kept for the record)
 
-Spec coverage: every spec section maps to tasks (product/hero flow: 11 to 17; tools: 12 and 17; framework: 9 and 10; architecture: 2 to 4; UI: 13 to 16; security: 5, 11, 18; timeline/submission: 19). Type names are consistent across tasks (NormalizedIdea, RawEvidence, AppContextSnapshot, cachedFetch, toToolResult). Founder and live-package verification gates are explicit; implementation contracts referenced by name live in docs/WEBMCP_TOOLS.md and docs/ARCHITECTURE.md, which are part of this plan's context.
+Spec coverage: every spec section maps to tasks (product/hero flow: 11 to 17; tools: 12 and 17; framework: 9 and 10; architecture: 2 to 4; UI: 13 to 16; security: 5, 11, 18; timeline/submission: 19). Type names are consistent across tasks (NormalizedIdea, RawEvidence, ModelContextTool, cachedFetch). Founder and live-package verification gates are explicit; implementation contracts referenced by name live in docs/WEBMCP_TOOLS.md and docs/ARCHITECTURE.md, which are part of this plan's context.

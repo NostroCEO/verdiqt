@@ -6,12 +6,12 @@
 
 Verdiqt helps serial builders, vibecoders, and indie hackers decide whether a SaaS idea deserves further investment. A builder and an AI agent put an idea on trial together: the agent gathers and interprets evidence, the human reviews and steers the trial, and the system returns a cited BUILD, PIVOT, or KILL verdict plus one cheapest next validation step.
 
-The product must prove a two-way collaboration loop. The agent can act through WebMCP, the human can pin or reject evidence, change scoring weights, and approve or deny consequential requests, and the page republishes those human actions so the agent can adapt within the same session.
+The product must prove a two-way collaboration loop. The agent can act through WebMCP, the human can pin or reject evidence, change scoring weights, and approve or deny consequential requests, and the persisted trial status and read tools expose those human actions so the agent can adapt within the same session.
 
 ## Actors
 
 - **Builder:** The primary user. A serial builder, vibecoder, or indie hacker deciding whether to pursue a SaaS idea or an existing public GitHub project.
-- **AI agent or WebMCP client:** Discovers and invokes Verdiqt tools, reads structured trial state, and responds to human decisions published by the page.
+- **AI agent or WebMCP client:** Discovers and invokes Verdiqt tools, reads structured trial state, and responds to persisted human decisions returned by the status and domain read tools.
 - **Signed-in GitHub user:** A builder who authorizes access to their public repositories for portfolio analysis. This is an optional extension of the core idea-validation journey.
 - **Knowledge corpus maintainer:** Writes and ingests the original Verdiqt validation playbook used for retrieval. This is an engineering role, not a public product role.
 - **External systems:** OpenAI APIs, Postgres with pgvector, supported public evidence APIs, GitHub, Product Hunt when configured, Render, and WebMCP-capable browsers.
@@ -34,7 +34,7 @@ The product must prove a two-way collaboration loop. The agent can act through W
 3. The dashboard shows progress through QUEUED, NORMALIZING, GATHERING, CLASSIFYING, and SCORING while evidence arrives.
 4. Each evidence card shows its source, URL, title, snippet, dimension, strength, and current human state.
 5. The builder may pin relevant evidence, reject irrelevant evidence, or adjust the six dimension weights so they remain non-negative and total 100.
-6. Human changes are logged, trigger the appropriate re-score, and are published to the WebMCP context.
+6. Human changes are logged, trigger the appropriate re-score, and appear in the next authoritative status read.
 7. When processing completes, the dashboard reveals the composite score, BUILD, PIVOT, or KILL verdict, six dimension scores and rationales, cited evidence, and exactly one recommended next step.
 8. The builder can inspect the chronological trial transcript to understand what the agent and human each did.
 
@@ -45,7 +45,7 @@ The product must prove a two-way collaboration loop. The agent can act through W
 3. The agent polls status, reads evidence, and reads the completed verdict through structured tool results.
 4. If the agent requests a deep scan, Verdiqt creates a pending approval and displays an approval card in the page.
 5. The human reviews the request and explicitly approves or denies it.
-6. Only approval starts the deeper scan. The page logs and republishes the human decision so the agent can continue from current state.
+6. Only approval starts the deeper scan. The page logs the human decision, and the next `get_validation_status` call returns it so the agent can continue from current state.
 
 ### Journey 3: Pivot and compare
 
@@ -72,7 +72,7 @@ The product must prove a two-way collaboration loop. The agent can act through W
 | FR-002 | The builder can start a validation trial from a public GitHub repository URL. | Must | A valid URL creates a trial whose idea is inferred from public repository metadata and sanitized README content. |
 | FR-003 | A trial exposes the statuses QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, and FAILED. | Must | The status endpoint and dashboard show the same current status. |
 | FR-004 | The dashboard streams trial events and newly gathered evidence without requiring a page refresh. | Must | Evidence cards and stage events appear while a real trial runs. |
-| FR-005 | Trial status includes the run identifier, evidence count, completed stages, and the five latest events. | Must | The status API and `get_validation_status` return those fields. |
+| FR-005 | Trial status includes the run identifier, evidence count, completed stages, five latest events, current pending approvals, and at most the last 10 human actions. | Must | The status API and `get_validation_status` return those fields from the persisted trial, approval, and event records. |
 | FR-006 | Anonymous trial creation is rate limited, with a documented judge access path that lifts the limit for that session. | Must | Exceeding the configured daily limit returns `rate_limited` with a retry hint; a valid judge session bypasses it. |
 
 ### Evidence and scoring
@@ -98,16 +98,16 @@ The product must prove a two-way collaboration loop. The agent can act through W
 
 | ID | Requirement | Priority | Observable proof |
 | --- | --- | --- | --- |
-| FR-021 | The app registers the 12 tools `start_validation`, `get_validation_status`, `get_evidence`, `request_deep_scan`, `get_verdict`, `refine_idea`, `compare_ideas`, `get_next_step`, `list_repos`, `analyze_repo`, `rank_portfolio`, and `search_knowledge`. | Must | All 12 are discoverable in each target WebMCP client with the documented descriptions and schemas. |
-| FR-022 | Each tool calls the same server route used by the human UI and contains no client-side business logic. | Must | UI and tool calls produce consistent domain state and responses. |
-| FR-023 | Every tool returns the result in both `structuredContent` and a JSON text content part, subject to verified WebMCP client compatibility. | Must | Tool contract tests and live client inspection show both representations through the shared adapter. |
+| FR-021 | The app registers the 12 tools `start_validation`, `get_validation_status`, `get_evidence`, `request_deep_scan`, `get_verdict`, `refine_idea`, `compare_ideas`, `get_next_step`, `list_repos`, `analyze_repo`, `rank_portfolio`, and `search_knowledge` through `document.modelContext`, with registration cleanup controlled by `AbortSignal`. | Must | All 12 are discoverable in each target WebMCP client with the documented descriptions and schemas, and provider cleanup removes its registrations without duplicate tools. |
+| FR-022 | Each tool calls the same server route used by the human UI, forwards the execution cancellation signal to its request, and contains no client-side business logic. | Must | UI and tool calls produce consistent domain state and responses, and cancelling a call aborts its in-flight request. |
+| FR-023 | Every tool returns its parsed serializable application result directly through WebMCP; an MCP `structuredContent` or `content` transport wrapper is not mandatory. | Must | Tool contract tests and live client inspection show successful direct object or scalar results; any required client-specific compatibility transform is isolated and documented. |
 | FR-024 | Tool and API inputs are validated against equivalent constrained schemas before domain logic runs. | Must | Invalid fields, lengths, enums, and required values return typed, actionable errors. |
 | FR-025 | `request_deep_scan` creates a pending approval and never starts the scan directly. | Must | The request returns `PENDING_HUMAN_APPROVAL`; no deep job runs before a human click. |
 | FR-026 | `rank_portfolio` creates a pending approval and never starts multiple analyses directly. | Must | The request returns `PENDING_HUMAN_APPROVAL`; no ranking work starts before a human click. |
 | FR-027 | Approval cards clearly state the requested action and offer keyboard-reachable Approve and Deny controls. | Must | A user can focus the card and approve with Enter or select Deny. |
 | FR-028 | Human approvals, denials, evidence changes, and weight changes are recorded as trial events. | Must | The transcript shows the action, actor, and timestamp. |
-| FR-029 | After every meaningful state change, the page republishes current trial state, pending approvals, and at most the last 10 human actions through WebMCP page context when supported. | Must | An agent sees a human pin, rejection, weight change, or approval in refreshed page context. |
-| FR-030 | The agent dock shows friendly agent activity, timestamps, pending approvals, and what context the agent currently sees. | Must | A live agent tool call appears in the dock and the matching transcript. |
+| FR-029 | After every meaningful state change, `get_validation_status` returns current trial state, pending approvals, and at most the last 10 human actions so the agent can explicitly re-read the authoritative state. | Must | After a human pin, rejection, weight change, approval, or denial, the next status call reflects the persisted action without a parallel publishing channel. |
+| FR-030 | The agent dock shows friendly agent activity, timestamps, pending approvals, and the current trial state returned by the latest reads. | Must | A live agent tool call appears in the dock and the matching transcript. |
 | FR-031 | Without WebMCP, Verdiqt remains fully usable through its human UI and does not render the agent dock. | Must | The core trial completes in a normal browser without model context. |
 
 ### Verdict, comparison, and portfolio
@@ -151,7 +151,7 @@ The product must prove a two-way collaboration loop. The agent can act through W
 | NFR-006 | Reliability | Trial writes and gated actions are repeat-safe through idempotency or explicit conflict handling. A failed call never silently creates duplicate or partial work. |
 | NFR-007 | Deployability | Task 1 leaves the scaffold buildable and deployable. From Task 2 onward, the live health endpoint reports success and the deployed revision after every implementation task. |
 | NFR-008 | Compatibility | The live app and all WebMCP tools are exercised in ChatGPT's in-app browser and Chrome 149 or newer with WebMCP testing enabled before submission. |
-| NFR-009 | Contract consistency | Human UI and tool actions use the same API routes. Agent-visible results, page context, and human-visible state do not contradict each other. |
+| NFR-009 | Contract consistency | Human UI and tool actions use the same API routes. Agent-visible read results and human-visible state do not contradict each other. |
 | NFR-010 | Data integrity | All six scoring weights are present, non-negative, and sum to 100. Trial status, events, evidence, verdicts, and linked pivots remain internally consistent. |
 | NFR-011 | Observability | Meaningful pipeline transitions, agent tool calls, source failures, approval requests, and human actions are recorded as inspectable events. |
 | NFR-012 | Content integrity | English UI copy is concise and decisive. UI copy contains no em dash character. Verdict colors are reserved for score and verdict elements. |
@@ -165,8 +165,8 @@ The product must prove a two-way collaboration loop. The agent can act through W
 | SEC-003 | Human control | Deep scans and portfolio ranking cannot be started by bypassing their approval records. Approval endpoints require the current Auth.js user or anonymous capability principal to own the approval and target, plus a verified same-origin request and a principal-bound CSRF token. |
 | SEC-004 | Untrusted content | Sanitize all external snippets and README text before display, persistence, prompts, or tool output. Never return raw fetched HTML. |
 | SEC-005 | Prompt injection | Treat text inside evidence wrappers as untrusted public-web data, never instructions. The scoring prompt distinguishes ordinary evidence from human-pinned relevance. |
-| SEC-006 | Secrets | API tokens, OAuth secrets, database credentials, judge access codes, and server environment values never enter client bundles, logs, page context, or tool results. |
-| SEC-007 | Data minimization | Tool results and page context include only data needed for the current trial or portfolio action and never expose unnecessary personal data. |
+| SEC-006 | Secrets | API tokens, OAuth secrets, database credentials, judge access codes, and server environment values never enter client bundles, logs, or tool results. |
+| SEC-007 | Data minimization | Tool results include only data needed for the current trial or portfolio action and never expose unnecessary personal data. |
 | SEC-008 | Public-source boundary | Repository analysis is limited to public repositories and sanitized public metadata or README content. Live evidence collection uses documented APIs and data the project has a right to use. |
 | SEC-009 | Evidence traceability | Evidence returned to an agent includes a non-empty source URL so the human can inspect the origin. Similarity and strength are signals, not claims of factual certainty. |
 | SEC-010 | Error safety | Errors are typed and actionable without leaking stack traces, raw provider responses, credentials, or unnecessary source content. |
@@ -188,7 +188,7 @@ The source documents do not yet define the final public data-retention or accoun
 
 - **Given** an agent has started a trial in a supported WebMCP client,
 - **When** the human pins one evidence item and changes valid weights,
-- **Then** both actions appear in the transcript and the next published context contains them for the agent.
+- **Then** both actions appear in the transcript and the next `get_validation_status` result contains them for the agent.
 
 ### AC-003: Deep scan remains gated
 
@@ -202,7 +202,7 @@ The source documents do not yet define the final public data-retention or accoun
 
 - **Given** a pending consequential request,
 - **When** the human selects Deny,
-- **Then** no gated work starts, the denial is recorded, and page context informs the agent.
+- **Then** no gated work starts, the denial is recorded, and the next status read informs the agent.
 
 ### AC-005: Evidence scarcity limits confidence
 
@@ -277,9 +277,9 @@ The source documents do not yet define the final public data-retention or accoun
 | Proof | Requirements demonstrated | Evidence to capture |
 | --- | --- | --- |
 | Live ninety-second hero flow | FR-001 through FR-005, FR-021 through FR-032 | In ChatGPT's in-app browser, the agent starts a trial, evidence streams into the same page, the human approves one deep scan, and the agent reads the cited verdict. |
-| Human feedback loop | FR-010, FR-013, FR-028 through FR-030 | Clip the human pinning or rejecting evidence or changing weights, followed by the updated action log and agent-visible page context. |
+| Human feedback loop | FR-010, FR-013, FR-028 through FR-030 | Clip the human pinning or rejecting evidence or changing weights, followed by the updated action log and the agent's refreshed status read. |
 | Evidence-first verdict | FR-008, FR-011 through FR-019, FR-032 | Show the gauge, radar, BUILD, PIVOT, or KILL stamp, linked evidence identifiers, insufficiency behavior, and single next step. |
-| WebMCP registry | FR-021 through FR-024 | Capture all 12 discoverable tools, valid schemas, dual-format responses, and a successful real call in both target clients. |
+| WebMCP registry | FR-021 through FR-024 | Capture all 12 discoverable `document.modelContext` tools, valid schemas, abortable registration cleanup, direct serializable results, and a successful real call in both target clients. |
 | Approval safety | FR-025 through FR-027, SEC-003 | Record that a deep scan and portfolio ranking stay pending until a page click, plus a denial path that runs no job. |
 | Failure recovery | FR-007, NFR-005, SEC-010 | Test or log one unavailable evidence source while the remaining sources complete successfully. |
 | Portfolio ambition | FR-037 and FR-038 | Show GitHub sign-in, public repositories, an approved ranking, the heatmap, and the strongest-project card if this scope survives the documented cut order. |

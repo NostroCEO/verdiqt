@@ -82,7 +82,7 @@ The agent uses Verdiqt's registered WebMCP surface to start the trial. The app o
 
 #### 1:25 to 1:38 | The page talks back to the agent
 
-**On screen:** Show that the agent sees the human actions through current page context and adapts its next analysis. Keep the dock activity feed visible.
+**On screen:** Show the agent re-reading current trial status, seeing the persisted human actions, and adapting its next analysis. Keep the dock activity feed visible.
 
 **Narration:**
 
@@ -127,7 +127,7 @@ The agent uses Verdiqt's registered WebMCP surface to start the trial. The app o
 - At least one cited evidence card is readable.
 - The deep-scan request creates a visible pending approval.
 - The scan does not run before the human approves it.
-- Pin, reject, and any weight change appear in page context and the transcript.
+- Pin, reject, and any weight change appear in the next status read and the transcript.
 - The agent visibly responds to the updated human-action context.
 - The final verdict, composite score, six-dimension radar, and one cheapest next experiment render correctly.
 - A citation link returns to the matching evidence card.

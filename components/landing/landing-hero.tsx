@@ -142,8 +142,26 @@ export function LandingHero() {
 
     setHasError(false);
     setFeedback(
-      "CASE " + caseName.toUpperCase() + " LOADED LOCALLY. SEE THE WALKTHROUGH BELOW.",
+      "CASE " + caseName.toUpperCase() + " OPENING IN THE PRODUCT PREVIEW BELOW.",
     );
+
+    window.dispatchEvent(
+      new CustomEvent("verdiqt:preview-start", {
+        detail: {
+          caseName,
+          source: trimmed,
+        },
+      }),
+    );
+
+    window.requestAnimationFrame(() => {
+      document.getElementById("trial-preview")?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
+    });
   }
 
   return (

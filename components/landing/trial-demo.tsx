@@ -1,498 +1,394 @@
 "use client";
 
-import { useState } from "react";
+import type { KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AnimatePresence,
   MotionConfig,
   motion,
+  useInView,
   useReducedMotion,
 } from "motion/react";
 import {
-  ArrowRight,
-  Bot,
-  Check,
   FileSearch,
   FolderGit2,
-  GitBranch,
   Gavel,
-  RotateCcw,
+  Scale,
   ScanSearch,
+  Terminal,
   UserRound,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+const AUTO_ADVANCE_DELAY_MS = 4_800;
+
 const steps = [
-  {
-    id: "case",
-    number: "01",
-    title: "Open the case",
-    copy: "Name the claim. Add an idea or a public repository. Set what the court should test.",
-  },
-  {
-    id: "evidence",
-    number: "02",
-    title: "Examine evidence",
-    copy: "The agent gathers sourced signals while you pin useful proof and reject noise.",
-  },
-  {
-    id: "verdict",
-    number: "03",
-    title: "Make the call",
-    copy: "Six dimensions resolve into BUILD, PIVOT, or KILL, plus the cheapest next test.",
-  },
+  { id: "open", number: "01", label: "Open case", event: "CASE_NORMALIZED" },
+  { id: "review", number: "02", label: "Review proof", event: "EVIDENCE_REVIEWED" },
+  { id: "verdict", number: "03", label: "Read verdict", event: "VERDICT_COMPOSED" },
 ] as const;
 
-function CasePanel({ reduceMotion }: { reduceMotion: boolean }) {
+type PreviewStartDetail = { caseName?: string; source?: string };
+type StageProps = { caseLabel: string; sourceLabel: string; reduceMotion: boolean };
+
+function cleanLabel(value: string | undefined, fallback: string, max: number) {
+  const cleaned = value?.replace(/\s+/g, " ").trim();
+  return cleaned ? cleaned.slice(0, max) : fallback;
+}
+
+function caseNameFromSource(source: string | undefined) {
+  const cleaned = source?.trim().replace(/\/$/, "");
+  return cleaned?.split("/").at(-1)?.replace(/[-_]+/g, " ");
+}
+
+function OpenStage({ caseLabel, sourceLabel, reduceMotion }: StageProps) {
+  const claims = [
+    ["Audience", "Indie SaaS teams"],
+    ["Problem", "Release notes consume launch time"],
+    ["Category", "Developer workflow"],
+    ["Test", "Paid intent before build"],
+  ] as const;
+
   return (
-    <div className="grid min-h-[26rem] gap-4 p-4 sm:p-6 lg:grid-cols-[0.78fr_1.22fr]">
-      <motion.aside
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
+    <div className="h-full pb-8 sm:pb-14">
+      <motion.div
+        initial={reduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: reduceMotion ? 0.15 : 0.38 }}
-        className="rounded-xl border border-border/80 bg-background/45 p-4"
+        transition={{ duration: reduceMotion ? 0.1 : 0.36 }}
+        className="flex items-start justify-between gap-4"
       >
-        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-primary">
-          <FolderGit2 className="size-4" />
-          Public repository
+        <div>
+          <p className="font-mono text-[0.55rem] uppercase tracking-[0.12em] text-primary">Stage 01 / Intake</p>
+          <h3 className="mt-1.5 text-lg font-semibold tracking-[-0.035em] sm:mt-2 sm:text-2xl">Turn a repository into a claim.</h3>
         </div>
-        <p className="mt-5 break-all text-sm font-semibold">github.com/you/your-saas</p>
-        <div className="mt-5 space-y-2 text-xs text-muted-foreground">
-          <p className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-            <span>Visibility</span>
-            <span className="text-foreground">Public</span>
-          </p>
-          <p className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-            <span>Mode</span>
-            <span className="text-foreground">Evidence first</span>
-          </p>
-          <p className="flex items-center justify-between gap-3 border-t border-border/70 pt-3">
-            <span>Approval gates</span>
-            <span className="text-foreground">Required</span>
-          </p>
-        </div>
-      </motion.aside>
+        <FolderGit2 className="mt-1 size-4 shrink-0 text-primary" />
+      </motion.div>
 
       <motion.div
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: reduceMotion ? 0 : 0.08, duration: 0.4 }}
-        className="rounded-xl border border-border bg-card p-5 sm:p-6"
+        initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: reduceMotion ? 0 : 0.12, duration: 0.32 }}
+        className="mt-3 border border-border bg-background p-2.5 sm:mt-5 sm:p-3"
       >
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-            Claim 01
-          </span>
-          <Badge variant="outline" className="border-border bg-card/60">
-            DRAFT
-          </Badge>
-        </div>
-        <h3 className="mt-7 max-w-lg text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
-          Founders need a faster way to decide what deserves to be built.
-        </h3>
-        <p className="mt-4 max-w-xl text-sm leading-6 text-muted-foreground">
-          The court will test urgency, willingness to pay, competition, reach,
-          execution cost, and timing. The human keeps final control over what
-          counts as evidence.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-2">
-          {["Demand", "Monetization", "Competition", "Build cost"].map(
-            (dimension, index) => (
-              <motion.span
-                key={dimension}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: reduceMotion ? 0 : 0.2 + index * 0.04 }}
-                className="rounded-full border border-border bg-background/60 px-3 py-1.5 text-xs text-muted-foreground"
-              >
-                {dimension}
-              </motion.span>
-            ),
-          )}
-        </div>
+        <p className="truncate font-mono text-[0.55rem] uppercase tracking-[0.08em] text-muted-foreground">{sourceLabel}</p>
+        <p className="mt-1 truncate text-xs font-semibold sm:text-sm">{caseLabel}</p>
       </motion.div>
+
+      <div className="mt-2 grid grid-cols-2 gap-px bg-border sm:mt-3">
+        {claims.map(([label, value], index) => (
+          <motion.div
+            key={label}
+            initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: reduceMotion ? 0 : 0.18 + index * 0.055 }}
+            className="min-h-12 bg-card p-2 sm:min-h-16 sm:p-3"
+          >
+            <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-primary">{label}</p>
+            <p className="mt-1 line-clamp-2 text-[0.65rem] leading-4 text-muted-foreground sm:text-xs">{value}</p>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function EvidenceRoute({ reduceMotion }: { reduceMotion: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 420 80"
-      className="h-auto w-full text-primary"
-      role="img"
-      aria-labelledby="evidence-route-title"
-    >
-      <title id="evidence-route-title">
-        Three evidence sources converging on human review
-      </title>
-      <path
-        d="M18 18H126C160 18 160 40 194 40H238"
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity="0.22"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M18 40H238"
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity="0.22"
-        strokeWidth="1.5"
-      />
-      <path
-        d="M18 62H126C160 62 160 40 194 40H238"
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity="0.22"
-        strokeWidth="1.5"
-      />
-      <motion.path
-        d="M18 18H126C160 18 160 40 194 40H238M18 40H238M18 62H126C160 62 160 40 194 40H238M238 40H396"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        initial={{ pathLength: reduceMotion ? 1 : 0, opacity: reduceMotion ? 1 : 0 }}
-        animate={{ pathLength: 1, opacity: 1 }}
-        transition={{ duration: reduceMotion ? 0.15 : 1.15, ease: "easeInOut" }}
-      />
-      {[18, 40, 62].map((y, index) => (
-        <motion.circle
-          key={y}
-          cx="18"
-          cy={y}
-          r="4"
-          fill="currentColor"
-          initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.5 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: reduceMotion ? 0 : 0.18 + index * 0.12 }}
-        />
-      ))}
-      <motion.circle
-        cx="396"
-        cy="40"
-        r="7"
-        fill="currentColor"
-        initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.5 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: reduceMotion ? 0 : 0.9, type: "spring" }}
-      />
-    </svg>
-  );
-}
+function ReviewStage({ reduceMotion }: StageProps) {
+  const evidence = [
+    ["HN-024", "Teams still assemble release notes by hand", "PINNED"],
+    ["WEB-118", "Comparable tools show a paid budget", "PINNED"],
+    ["GH-071", "Repository signal lacks buyer intent", "REJECTED"],
+  ] as const;
 
-function EvidencePanel({ reduceMotion }: { reduceMotion: boolean }) {
   return (
-    <div className="grid min-h-[26rem] gap-4 p-4 sm:p-6 lg:grid-cols-[1.18fr_0.82fr]">
-      <div className="rounded-xl border border-border/80 bg-background/45 p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-primary">
-            Evidence route
-          </p>
-          <span className="inline-flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-primary" />
-            Simulated
-          </span>
-        </div>
-        <div className="my-3 rounded-lg border border-border/70 bg-card/55 px-2 py-3">
-          <EvidenceRoute reduceMotion={reduceMotion} />
-        </div>
-        <div className="space-y-2.5">
-          {[
-            ["Founder forums", "Recurring pain confirmed", "PINNED"],
-            ["Open web", "Existing budgets found", "PINNED"],
-            ["Public GitHub", "Build surface mapped", "REVIEW"],
-          ].map(([source, finding, status], index) => (
-            <motion.div
-              key={source}
-              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: reduceMotion ? 0 : index * 0.04 }}
-              className="flex items-center gap-3 rounded-lg border border-border/75 bg-card/55 p-3"
-            >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                <ScanSearch className="size-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-xs text-muted-foreground">{source}</span>
-                <span className="mt-0.5 block truncate text-sm font-medium">
-                  {finding}
-                </span>
-              </span>
-              <span className="text-[0.68rem] font-semibold text-primary">{status}</span>
-            </motion.div>
-          ))}
-        </div>
+    <div className="h-full pb-8 sm:pb-14">
+      <div className="flex items-start justify-between gap-4">
+        <motion.div initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }}>
+          <p className="font-mono text-[0.55rem] uppercase tracking-[0.12em] text-primary">Stage 02 / Evidence</p>
+          <h3 className="mt-1.5 text-lg font-semibold tracking-[-0.035em] sm:mt-2 sm:text-2xl">The agent brings breadth. You judge relevance.</h3>
+        </motion.div>
+        <ScanSearch className="mt-1 size-4 shrink-0 text-primary" />
       </div>
 
-      <motion.aside
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
+      <div className="mt-3 space-y-1.5 sm:mt-5 sm:space-y-2">
+        {evidence.map(([id, finding, state], index) => (
+          <motion.div
+            key={id}
+            initial={reduceMotion ? false : { opacity: 0, x: 14 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: reduceMotion ? 0 : 0.08 + index * 0.08, duration: 0.3 }}
+            className="grid grid-cols-[3.25rem_minmax(0,1fr)_auto] items-center gap-2 border border-border bg-background p-2 sm:grid-cols-[4rem_minmax(0,1fr)_4.5rem] sm:gap-3 sm:p-3"
+          >
+            <span className="font-mono text-[0.52rem] tracking-[0.08em] text-primary">{id}</span>
+            <span className="truncate text-[0.65rem] font-medium sm:text-xs">{finding}</span>
+            <span className={cn(
+              "border px-1.5 py-1 text-center font-mono text-[0.46rem] font-semibold tracking-[0.06em] sm:text-[0.52rem]",
+              state === "PINNED" ? "border-primary/45 bg-primary/10 text-primary" : "border-border text-muted-foreground",
+            )}>{state}</span>
+          </motion.div>
+        ))}
+      </div>
+
+      <motion.div
+        initial={reduceMotion ? false : { opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: reduceMotion ? 0 : 0.18 }}
-        className="flex flex-col rounded-xl border border-border/80 bg-surface-2/55 p-4"
+        transition={{ delay: reduceMotion ? 0 : 0.38 }}
+        className="mt-2 flex items-center justify-between gap-3 border-l-2 border-primary bg-primary/5 px-3 py-2 sm:mt-3"
       >
-        <div className="flex items-center gap-2 border-b border-border/70 pb-3 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          <Bot className="size-4 text-primary" />
-          Agent activity preview
-        </div>
-        <div className="flex-1 space-y-4 py-5 font-mono text-xs leading-5">
-          <p className="text-muted-foreground">
-            <span className="text-primary">01</span> Frame the validation claims
-          </p>
-          <p className="text-muted-foreground">
-            <span className="text-primary">02</span> Collect public signals
-          </p>
-          <p className="text-muted-foreground">
-            <span className="text-primary">03</span> Request human review
-          </p>
-          <p className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-foreground">
-            Three evidence cards are ready for judgment.
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-2">
-            <UserRound className="size-4" />
-            Human approval
-          </span>
-          <Badge className="border-primary/25 bg-primary/10 text-primary">
-            REQUIRED
-          </Badge>
-        </div>
-      </motion.aside>
+        <span className="flex items-center gap-2 text-[0.65rem] font-medium sm:text-xs"><UserRound className="size-3.5 text-primary" />Human review recorded</span>
+        <span className="font-mono text-[0.5rem] text-muted-foreground">2 KEEP / 1 DROP</span>
+      </motion.div>
     </div>
   );
 }
 
-function VerdictPanel({ reduceMotion }: { reduceMotion: boolean }) {
+function VerdictStage({ reduceMotion }: StageProps) {
   return (
-    <div className="grid min-h-[26rem] gap-4 p-4 sm:p-6 lg:grid-cols-[0.82fr_1.18fr]">
-      <motion.div
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: reduceMotion ? 0.15 : 0.42 }}
-        className="relative flex min-h-64 flex-col items-center justify-center overflow-hidden rounded-xl border border-build/30 bg-build/5 p-6 text-center"
-      >
-        <div className="verdict-rings absolute inset-0" aria-hidden="true" />
-        <span className="relative text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-          Composite score
-        </span>
-        <motion.span
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: reduceMotion ? 0 : 0.18 }}
-          className="relative mt-4 text-6xl font-semibold tracking-[-0.07em] text-build"
+    <div className="h-full pb-8 sm:pb-14">
+      <div className="flex items-start justify-between gap-4">
+        <motion.div initial={reduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }}>
+          <p className="font-mono text-[0.55rem] uppercase tracking-[0.12em] text-primary">Stage 03 / Decision</p>
+          <h3 className="mt-1.5 text-lg font-semibold tracking-[-0.035em] sm:mt-2 sm:text-2xl">A verdict that tells you what to do next.</h3>
+        </motion.div>
+        <Gavel className="mt-1 size-4 shrink-0 text-primary" />
+      </div>
+
+      <div className="mt-3 grid gap-px border border-border bg-border sm:mt-5 sm:grid-cols-[0.76fr_1.24fr]">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, scale: 1.12 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: reduceMotion ? 0 : 0.08, type: "spring", stiffness: 250, damping: 20 }}
+          className="flex min-h-24 items-center justify-between bg-build/5 px-4 py-3 text-center sm:min-h-44 sm:flex-col sm:justify-center sm:p-4"
         >
-          78
-          <span className="ml-2 inline-block text-lg tracking-normal text-muted-foreground">
-            /100
-          </span>
-        </motion.span>
-        <motion.span
-          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.35, rotate: -2 }}
-          animate={{ opacity: 1, scale: 1, rotate: -6 }}
-          transition={{
-            delay: reduceMotion ? 0 : 0.38,
-            type: "spring",
-            stiffness: 260,
-            damping: 18,
-          }}
-          className="relative mt-7 rounded-lg border-2 border-build/75 bg-build/10 px-6 py-2 text-lg font-extrabold tracking-[0.2em] text-build"
+          <span className="font-mono text-[0.5rem] uppercase tracking-[0.1em] text-muted-foreground">78 / 100</span>
+          <span className="border-2 border-build/70 px-4 py-1.5 text-lg font-extrabold tracking-[0.18em] text-build sm:mt-4 sm:text-2xl">BUILD</span>
+          <span className="hidden font-mono text-[0.48rem] text-muted-foreground sm:mt-4 sm:block">BUILD / PIVOT / KILL</span>
+        </motion.div>
+
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, x: 14 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: reduceMotion ? 0 : 0.18, duration: 0.34 }}
+          className="bg-background p-3 sm:p-4"
         >
-          BUILD
-        </motion.span>
-      </motion.div>
-
-      <motion.div
-        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: reduceMotion ? 0 : 0.12 }}
-        className="rounded-xl border border-border/80 bg-background/45 p-5 sm:p-6"
-      >
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
-          The evidence is in
-        </p>
-        <h3 className="mt-4 text-2xl font-semibold tracking-[-0.04em] sm:text-3xl">
-          This one deserves a narrow first build.
-        </h3>
-        <p className="mt-4 text-sm leading-6 text-muted-foreground">
-          The problem is sharp and reachable. The court still sees pricing risk,
-          so the next move is a paid-intent test before the full product.
-        </p>
-
-        <div className="mt-6 grid gap-2 sm:grid-cols-2">
-          {["6 cited findings", "2 assumptions challenged", "1 approval gate", "1 next test"].map(
-            (item, index) => (
-              <motion.div
-                key={item}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: reduceMotion ? 0 : 0.28 + index * 0.04 }}
-                className="flex items-center gap-2 rounded-lg border border-border/75 bg-card/55 p-3 text-sm"
-              >
-                <Check className="size-4 shrink-0 text-build" />
-                {item}
-              </motion.div>
-            ),
-          )}
-        </div>
-
-        <div className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-primary/25 bg-primary/5 p-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">
-              Cheapest next test
-            </p>
-            <p className="mt-1.5 text-sm font-medium">Pre-sell five founder interviews</p>
+          <p className="font-mono text-[0.52rem] uppercase tracking-[0.1em] text-primary">Cheapest next test</p>
+          <p className="mt-2 text-xs font-semibold leading-4 sm:text-base sm:leading-5">Pre-sell five release-workflow interviews.</p>
+          <p className="mt-2 hidden text-xs leading-5 text-muted-foreground sm:block">Stop if fewer than two teams commit. Estimated effort: four hours.</p>
+          <div className="mt-3 flex gap-3 border-t border-border pt-2 font-mono text-[0.48rem] text-muted-foreground sm:mt-4 sm:text-[0.54rem]">
+            <span>12 CITATIONS</span><span>1 NEXT MOVE</span>
           </div>
-          <ArrowRight className="size-5 shrink-0 text-primary" />
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
+  );
+}
+
+function EventRail({ activeStep }: { activeStep: number }) {
+  return (
+    <aside aria-label="Preview event record" className="min-w-0 border-t border-border bg-background lg:border-l lg:border-t-0">
+      <p className="hidden border-b border-border px-3 py-3 font-mono text-[0.52rem] uppercase tracking-[0.1em] text-muted-foreground lg:block">Event record</p>
+      <ol className="grid h-full grid-cols-3 lg:block lg:h-auto">
+        {steps.map((step, index) => {
+          const state = index < activeStep ? "DONE" : index === activeStep ? "ACTIVE" : "QUEUED";
+          return (
+            <li key={step.id} className="min-w-0 border-r border-border px-2 py-2 last:border-r-0 lg:border-b lg:border-r-0 lg:px-3 lg:py-4">
+              <span className="flex items-center gap-1.5 font-mono text-[0.46rem] tracking-[0.06em] lg:text-[0.5rem]">
+                <span className={cn("size-1.5 shrink-0", index <= activeStep ? "bg-primary" : "bg-border")} />
+                <span className={cn(index === activeStep ? "text-foreground" : "text-muted-foreground")}>{state}</span>
+              </span>
+              <span className="mt-1 hidden truncate font-mono text-[0.48rem] text-muted-foreground lg:block">{step.event}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </aside>
   );
 }
 
 export function TrialDemo() {
-  const prefersReducedMotion = useReducedMotion();
-  const reduceMotion = prefersReducedMotion === true;
+  const sectionRef = useRef<HTMLElement>(null);
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const isInView = useInView(sectionRef, { amount: 0.25 });
+  const reduceMotion = useReducedMotion() === true;
   const [activeStep, setActiveStep] = useState(0);
-  const [replayKey, setReplayKey] = useState(0);
+  const [sequenceKey, setSequenceKey] = useState(0);
+  const [launchTicksRemaining, setLaunchTicksRemaining] = useState(0);
+  const [caseLabel, setCaseLabel] = useState("Changelog agent");
+  const [sourceLabel, setSourceLabel] = useState("github.com/you/changelog-agent");
+  const [isHovered, setIsHovered] = useState(false);
+  const [hasFocusWithin, setHasFocusWithin] = useState(false);
+  const launchCycleActive = launchTicksRemaining > 0;
+  const paused =
+    reduceMotion ||
+    !isInView ||
+    hasFocusWithin ||
+    (isHovered && !launchCycleActive);
 
-  const active = steps[activeStep];
+  useEffect(() => {
+    function handlePreviewStart(event: Event) {
+      const detail = (event as CustomEvent<PreviewStartDetail>).detail ?? {};
+      const nextSource = cleanLabel(detail.source, "Public repository", 80);
+      const nextCase = cleanLabel(detail.caseName ?? caseNameFromSource(detail.source), "Untitled case", 48);
+      setSourceLabel(nextSource);
+      setCaseLabel(nextCase);
+      setActiveStep(0);
+      setSequenceKey((current) => current + 1);
+      setLaunchTicksRemaining(reduceMotion ? 0 : steps.length);
+    }
+    window.addEventListener("verdiqt:preview-start", handlePreviewStart);
+    return () => window.removeEventListener("verdiqt:preview-start", handlePreviewStart);
+  }, [reduceMotion]);
+
+  useEffect(() => {
+    if (paused) return;
+    const timeout = window.setTimeout(() => {
+      setActiveStep((current) => (current + 1) % steps.length);
+      setSequenceKey((current) => current + 1);
+      setLaunchTicksRemaining((current) => Math.max(0, current - 1));
+    }, AUTO_ADVANCE_DELAY_MS);
+    return () => window.clearTimeout(timeout);
+  }, [activeStep, paused, sequenceKey]);
 
   function selectStep(index: number) {
     setActiveStep(index);
-    setReplayKey((current) => current + 1);
+    setSequenceKey((current) => current + 1);
   }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const nextByKey: Record<string, number> = {
+      ArrowRight: (index + 1) % steps.length,
+      ArrowDown: (index + 1) % steps.length,
+      ArrowLeft: (index - 1 + steps.length) % steps.length,
+      ArrowUp: (index - 1 + steps.length) % steps.length,
+      Home: 0,
+      End: steps.length - 1,
+    };
+    const next = nextByKey[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    selectStep(next);
+    tabRefs.current[next]?.focus();
+  }
+
+  const active = steps[activeStep];
+  const terminalLines = [
+    ["$ normalize repository", "claim set: 6 dimensions"],
+    ["$ review cited evidence", "human record: 2 keep / 1 drop"],
+    ["$ compose grounded verdict", "next test attached"],
+  ][activeStep];
 
   return (
     <MotionConfig reducedMotion="user">
       <section
+        ref={sectionRef}
         id="how-it-works"
         aria-labelledby="proceeding-title"
-        className="editorial-light border-b border-border bg-background text-foreground"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onFocusCapture={() => setHasFocusWithin(true)}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) setHasFocusWithin(false);
+        }}
+        className="scroll-mt-20 border-b border-border bg-background"
       >
-        <div className="mx-auto max-w-[80rem] border-x border-border px-5 py-20 sm:px-8 lg:px-10 lg:py-28">
-          <div className="mb-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="font-mono text-xs font-semibold uppercase tracking-[0.12em] text-primary">
-                [02] The proceeding
-              </p>
-              <h2
-                id="proceeding-title"
-                className="mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-5xl"
-              >
-                Three moves. No guessing.
-              </h2>
+        <div className="mx-auto max-w-[80rem] border-x border-border px-5 py-14 sm:px-8 sm:py-20 lg:px-10">
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.12em] text-primary">[02] The proceeding</p>
+          <h2 id="proceeding-title" className="mt-3 max-w-3xl text-3xl font-semibold tracking-[-0.045em] sm:text-5xl">One case. Three decisive moves.</h2>
+
+          <div className="mt-7 sm:mt-10">
+            <div role="tablist" aria-label="Trial preview stages" className="grid h-10 grid-cols-3 gap-px border-x border-border bg-border">
+              {steps.map((step, index) => {
+                const selected = index === activeStep;
+                return (
+                  <button
+                    key={step.id}
+                    ref={(node) => { tabRefs.current[index] = node; }}
+                    id={`proceeding-tab-${step.id}`}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    aria-controls="proceeding-panel"
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => selectStep(index)}
+                    onKeyDown={(event) => handleKeyDown(event, index)}
+                    className={cn(
+                      "relative h-10 min-w-0 border-y border-border bg-background px-1 font-mono text-xs uppercase tracking-[-0.02em] outline-none focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-3 sm:tracking-[0.08em]",
+                      selected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {selected ? <motion.span layoutId="active-preview-tab" className="absolute inset-0 bg-surface-2" transition={{ duration: reduceMotion ? 0 : 0.3 }} /> : null}
+                    <span className="relative"><span className="mr-1 text-primary sm:mr-2">{step.number}</span>{step.label}</span>
+                    {selected && !reduceMotion ? (
+                      <motion.span
+                        key={`${step.id}-${paused ? "paused" : sequenceKey}`}
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: paused ? 0 : 1 }}
+                        transition={{ duration: paused ? 0 : AUTO_ADVANCE_DELAY_MS / 1_000, ease: "linear" }}
+                        className="absolute inset-x-0 bottom-0 h-px origin-left bg-primary"
+                      />
+                    ) : null}
+                  </button>
+                );
+              })}
             </div>
-            <p className="max-w-xl text-sm leading-6 text-muted-foreground lg:text-right">
-              An interactive product walkthrough. Select each stage to see how a
-              repository becomes an evidence-backed decision.
-            </p>
-          </div>
 
-          <div
-            className="grid gap-px overflow-hidden rounded-2xl border border-border/85 bg-border/85 md:grid-cols-3"
-            role="tablist"
-            aria-label="Trial walkthrough stages"
-          >
-            {steps.map((step, index) => {
-              const selected = index === activeStep;
+            <div id="trial-preview" className="mt-2 flex h-[25rem] scroll-mt-32 flex-col overflow-hidden border border-border bg-card sm:h-[32.5rem]">
+              <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-3 sm:h-12 sm:px-4">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="grid size-6 shrink-0 place-items-center border border-primary/40 bg-primary/10 text-primary"><Gavel className="size-3" /></span>
+                  <span className="shrink-0 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-primary">Product preview</span>
+                  <span className="truncate border-l border-border pl-2.5 text-xs font-semibold">{caseLabel}</span>
+                </div>
+                <span className="shrink-0 font-mono text-[0.52rem] text-muted-foreground">0{activeStep + 1} / 03</span>
+              </div>
 
-              return (
-                <button
-                  key={step.id}
-                  id={"proceeding-tab-" + step.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  aria-controls="proceeding-panel"
-                  onClick={() => selectStep(index)}
-                  className={cn(
-                    "relative min-h-36 bg-background p-5 text-left outline-none transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-6",
-                    selected ? "text-foreground" : "text-muted-foreground hover:bg-card",
-                  )}
-                >
-                  {selected ? (
-                    <motion.span
-                      layoutId="active-proceeding-step"
-                      className="absolute inset-0 bg-foreground/[0.04]"
-                      transition={{ type: "spring", stiffness: 300, damping: 28 }}
-                    />
-                  ) : null}
-                  <span className="relative text-xs font-semibold tracking-[0.16em] text-primary">
-                    {step.number}
-                  </span>
-                  <span className="relative mt-4 block text-base font-semibold text-foreground">
-                    {step.title}
-                  </span>
-                  <span className="relative mt-2 block text-sm leading-5">
-                    {step.copy}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+              <div className="grid min-h-0 flex-1 sm:grid-cols-[3rem_minmax(0,1fr)]">
+                <aside aria-label="Preview application navigation" className="hidden flex-col items-center border-r border-border bg-background py-3 sm:flex">
+                  {[FolderGit2, FileSearch, UserRound, Scale].map((Icon, index) => (
+                    <span key={index} className={cn("mb-2 grid size-8 place-items-center border", index === activeStep ? "border-primary/45 bg-primary/10 text-primary" : "border-transparent text-muted-foreground")}><Icon className="size-3.5" /></span>
+                  ))}
+                </aside>
 
-          <div className="mt-4 overflow-hidden rounded-2xl border border-border/85 bg-card/60">
-            <div className="flex flex-col gap-3 border-b border-border/80 bg-background/55 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-              <div className="flex items-center gap-3">
-                <span className="grid size-8 place-items-center rounded-lg border border-primary/25 bg-primary/10 text-primary">
-                  {activeStep === 0 ? (
-                    <GitBranch className="size-4" />
-                  ) : activeStep === 1 ? (
-                    <FileSearch className="size-4" />
-                  ) : (
-                    <Gavel className="size-4" />
-                  )}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold">Trial room walkthrough</p>
-                  <p className="text-xs text-muted-foreground">
-                    Stage {activeStep + 1} of {steps.length}: {active.title}
-                  </p>
+                <div className="grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_2.5rem] lg:grid-cols-[minmax(0,1fr)_11rem] lg:grid-rows-1">
+                  <div
+                    id="proceeding-panel"
+                    role="tabpanel"
+                    aria-labelledby={`proceeding-tab-${active.id}`}
+                    tabIndex={0}
+                    className="relative min-h-0 min-w-0 overflow-hidden bg-card p-3 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:p-5"
+                  >
+                    <AnimatePresence initial={false} mode="wait">
+                      <motion.div
+                        key={`${active.id}-${sequenceKey}`}
+                        initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={reduceMotion ? undefined : { opacity: 0, x: -8 }}
+                        transition={reduceMotion ? { duration: 0 } : { duration: 0.5, ease: "easeOut" }}
+                        className="h-full"
+                      >
+                        {activeStep === 0 ? <OpenStage caseLabel={caseLabel} sourceLabel={sourceLabel} reduceMotion={reduceMotion} /> : null}
+                        {activeStep === 1 ? <ReviewStage caseLabel={caseLabel} sourceLabel={sourceLabel} reduceMotion={reduceMotion} /> : null}
+                        {activeStep === 2 ? <VerdictStage caseLabel={caseLabel} sourceLabel={sourceLabel} reduceMotion={reduceMotion} /> : null}
+                      </motion.div>
+                    </AnimatePresence>
+
+                    <motion.div
+                      key={`terminal-${active.id}-${sequenceKey}`}
+                      initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: reduceMotion ? 0 : 0.34, duration: 0.24 }}
+                      aria-hidden="true"
+                      className="absolute inset-x-3 bottom-2 flex items-center gap-2 border border-border bg-background/95 px-2 py-1 font-mono text-[0.48rem] text-muted-foreground sm:inset-x-auto sm:bottom-3 sm:right-3 sm:w-64 sm:block sm:px-3 sm:py-2 sm:text-[0.54rem]"
+                    >
+                      <Terminal className="size-3 shrink-0 text-primary sm:mb-1" />
+                      <p className="truncate text-foreground">{terminalLines[0]}</p>
+                      <p className="hidden truncate sm:block">{terminalLines[1]}</p>
+                    </motion.div>
+                  </div>
+
+                  <EventRail activeStep={activeStep} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="border-border bg-card/60">
-                  SIMULATED
-                </Badge>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setReplayKey((current) => current + 1)}
-                  aria-label={"Replay " + active.title + " animation"}
-                >
-                  <RotateCcw className="size-3.5" />
-                  Replay
-                </Button>
-              </div>
-            </div>
-
-            <div
-              id="proceeding-panel"
-              role="tabpanel"
-              aria-labelledby={"proceeding-tab-" + active.id}
-            >
-              <AnimatePresence initial={false} mode="wait">
-                <motion.div
-                  key={active.id + "-" + replayKey}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: reduceMotion ? 0.1 : 0.22 }}
-                >
-                  {activeStep === 0 ? (
-                    <CasePanel reduceMotion={reduceMotion} />
-                  ) : activeStep === 1 ? (
-                    <EvidencePanel reduceMotion={reduceMotion} />
-                  ) : (
-                    <VerdictPanel reduceMotion={reduceMotion} />
-                  )}
-                </motion.div>
-              </AnimatePresence>
             </div>
           </div>
         </div>

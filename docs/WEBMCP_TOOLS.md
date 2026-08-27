@@ -7,61 +7,68 @@ This is the complete contract for every WebMCP tool Verdiqt registers. Implement
 File: `lib/webmcp/registry.ts` (client-side, loaded by a `WebMCPProvider` client component mounted in the root layout).
 
 Before implementing, verify the current API surface against:
-- https://developer.chrome.com/docs/ai/webmcp
+- https://developer.chrome.com/docs/ai/webmcp/imperative-api
+- https://webmachinelearning.github.io/webmcp (current draft)
 - https://github.com/webmachinelearning/webmcp (explainer)
 
-The registry must feature-detect both entry points and isolate any API drift in this one file:
+The current imperative API lives on `document.modelContext`. Isolate API drift in this one file:
 
 ```ts
+type ToolExecutionOptions = {
+  signal: AbortSignal;
+};
+
+type ModelContextTool = {
+  name: string;
+  title?: string;
+  description: string;
+  inputSchema: Record<string, unknown>; // JSON Schema
+  annotations?: {
+    readOnlyHint?: boolean;
+    untrustedContentHint?: boolean;
+  };
+  execute: (input: unknown, options: ToolExecutionOptions) => Promise<unknown>;
+};
+
 type ModelContext = {
-  registerTool: (tool: {
-    name: string;
-    description: string;
-    inputSchema: Record<string, unknown>; // JSON Schema
-    execute: (input: unknown) => Promise<unknown>;
-  }) => unknown;
-  provideContext?: (ctx: unknown) => unknown;
+  registerTool: (
+    tool: ModelContextTool,
+    options?: { signal?: AbortSignal },
+  ) => Promise<void>;
 };
 
 export function getModelContext(): ModelContext | null {
-  const nav = navigator as unknown as { modelContext?: ModelContext };
   const doc = document as unknown as { modelContext?: ModelContext };
-  return nav.modelContext ?? doc.modelContext ?? null;
+  return doc.modelContext ?? null;
+}
+
+export async function registerAllTools(
+  modelContext: ModelContext,
+  tools: ModelContextTool[],
+  signal: AbortSignal,
+): Promise<void> {
+  await Promise.all(
+    tools.map((tool) => modelContext.registerTool(tool, { signal })),
+  );
 }
 ```
 
+`WebMCPProvider` creates one `AbortController` for its registration lifecycle, passes its signal to every `registerTool` call, and calls `controller.abort()` during effect cleanup. Each `execute(input, { signal })` callback also forwards its execution signal to same-origin `fetch` so a cancelled invocation stops unnecessary work. A `navigator.modelContext` fallback is legacy compatibility only: add it after the `document.modelContext` check only if a required live client proves it necessary, keep it isolated in `getModelContext`, and record that verified exception in `docs/STATE.md`.
+
 Rules for every tool:
 
-- Tool `execute` functions are thin: they call the same `/api/*` routes the UI uses, with `fetch`, and return the JSON result as a text content part. No business logic in the client.
-- Tool fetches are same-origin with credentials included. The API resolves the current Auth.js user or anonymous capability cookie on every owner-scoped request. A `run_id` alone never grants access.
-- Every tool result goes through a shared helper `toToolResult(result)` that returns BOTH representations OpenAI's MCP guidance expects (https://developers.openai.com/api/docs/mcp): `structuredContent` set to the result object, and `content: [{ type: "text", text: JSON.stringify(result) }]`. If the verified current WebMCP API expects a narrower shape, adapt inside this one helper only.
+- Tool `execute` functions are thin: they call the same `/api/*` routes the UI uses, with `fetch`, and return the parsed serializable application JSON directly. No business logic lives in the client.
+- Tool fetches are same-origin with credentials included and receive the execution `AbortSignal`. The API resolves the current Auth.js user or anonymous capability cookie on every owner-scoped request. A `run_id` alone never grants access.
+- WebMCP does not require an MCP transport envelope. Do not require `structuredContent`, `content`, or a shared result-wrapper helper in the baseline implementation. If a required live client later proves it needs a compatibility transform, isolate that transform at the registry boundary and record the verified behavior without changing the route contracts.
 - Evidence objects in tool results always include their `url` field populated; ChatGPT builds citations only from non-empty url strings, and cited evidence is part of the product's credibility story.
 - Tool descriptions are written for agents: verb-first, concrete, and they state preconditions (for example that `request_deep_scan` requires human approval in the page).
 - When WebMCP is absent, the provider renders nothing and the site works normally; a small dismissible banner suggests opening the site in an agent-capable browser.
 
-## Page context
+## Authoritative state reads
 
-After each meaningful state change (trial created, stage change, verdict ready, human action), the provider re-publishes page context via `provideContext` (when available) with this shape:
+Verdiqt does not publish a separate model-context snapshot. Stable read tools expose the same persisted state that the human UI reads.
 
-```json
-{
-  "app": "Verdiqt",
-  "state": {
-    "currentTrialId": "abc123",
-    "status": "SCORING",
-    "compositeScore": null,
-    "verdict": null,
-    "pendingApprovals": [{ "approvalId": "apr1", "kind": "deep_scan", "state": "PENDING_HUMAN_APPROVAL", "dimension": "MONETIZATION" }],
-    "humanActions": [
-      { "kind": "pinned_evidence", "evidenceId": "ev1", "at": "2026-08-28T10:00:00Z" },
-      { "kind": "weights_changed", "weights": { "MONETIZATION": 30 }, "at": "..." }
-    ]
-  },
-  "hint": "The human just pinned evidence ev1. Consider weighting it in your analysis."
-}
-```
-
-The `pendingApprovals` list comes from persistent Approval rows and survives reloads. The `humanActions` log is capped at the last 10 actions. This context loop is what makes the collaboration two-way; do not cut it.
+`get_validation_status` is the authoritative current-state read for an active trial. In addition to progress, it returns pending approvals from persistent `Approval` rows and at most the last 10 human actions derived from `TrialEvent`. After a human pins or rejects evidence, changes weights, approves, or denies a request, the agent calls `get_validation_status` again and then uses `get_evidence` or `get_verdict` when it needs the updated domain data. This explicit read loop keeps agent-visible and human-visible state consistent after reloads and across tabs without a second context channel.
 
 ## Tools
 
@@ -78,10 +85,10 @@ All input schemas below are JSON Schema. Server-side, the matching API route val
 
 ### 2. get_validation_status
 
-- Description: "Get the status and progress of a validation trial. Statuses: QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, FAILED."
+- Description: "Get the current status, progress, pending approvals, and recent human actions for a validation trial. Call again after the human changes evidence, weights, or an approval. Statuses: QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, FAILED."
 - Input: `{ "type": "object", "properties": { "run_id": { "type": "string" } }, "required": ["run_id"], "additionalProperties": false }`
 - Calls: `GET /api/trials/:id/status`
-- Returns: `{ run_id, status, evidence_count, stages_done, latest_events: [...last 5 TrialEvents...] }`
+- Returns: `{ run_id, status, evidence_count, stages_done, latest_events: [...last 5 TrialEvents...], pending_approvals: [{ approval_id, kind, state, dimension? }], human_actions: [...last 10 human TrialEvents...] }`
 
 ### 3. get_evidence
 
@@ -166,7 +173,7 @@ All input schemas below are JSON Schema. Server-side, the matching API route val
 - Evidence snippets and README content in any tool response have already passed `lib/sanitize.ts`. Never return raw fetched HTML or raw external text.
 - Rate limits apply at the API layer, so tools inherit them automatically. A judge enters `JUDGE_ACCESS_CODE` only in the `/judge` page form, which exchanges it for a short-lived signed `HttpOnly`, `Secure`, `SameSite=Lax` cookie. Never accept the raw code in a URL, general API header, tool input, local storage, context, result, analytics event, or log.
 - The judge cookie bypasses anonymous rate limits only. It never grants trial ownership, GitHub access, approval authority, or portfolio mutations.
-- Tool results and page context never contain session cookies, anonymous capabilities, OAuth access tokens, Auth.js JWTs, judge codes, or judge-cookie claims.
+- Tool results never contain session cookies, anonymous capabilities, OAuth access tokens, Auth.js JWTs, judge codes, or judge-cookie claims.
 
 ## Eval checklist (run before submission, see Chrome's WebMCP evals doc)
 
