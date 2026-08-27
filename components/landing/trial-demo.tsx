@@ -132,13 +132,27 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function TrialDashboard() {
-  const [intake, setIntake] = useState<DashboardIntake>({
-    caseLabel: "No case loaded",
-    sourceLabel: "Paste a public GitHub URL above",
-    inputType: "repo",
-    hasInput: false,
-  });
+export function TrialDashboard({
+  initialIntake,
+}: {
+  initialIntake?: PreviewStartDetail;
+} = {}) {
+  const [intake, setIntake] = useState<DashboardIntake>(() =>
+    initialIntake && (initialIntake.caseName || initialIntake.source)
+      ? {
+          caseLabel: cleanLabel(initialIntake.caseName, "Untitled case", 64),
+          sourceLabel: cleanLabel(initialIntake.source, "No input supplied", 120),
+          inputType:
+            initialIntake.inputType ?? inferInputType(initialIntake.source),
+          hasInput: true,
+        }
+      : {
+          caseLabel: "No case loaded",
+          sourceLabel: "Open a case from the home page",
+          inputType: "repo",
+          hasInput: false,
+        },
+  );
 
   useEffect(() => {
     function handlePreviewStart(event: Event) {
@@ -157,7 +171,16 @@ export function TrialDashboard() {
   }, []);
 
   function returnToIntake() {
-    document.getElementById("trial-input")?.focus();
+    const input = document.getElementById("trial-input");
+
+    // The intake lives on the landing hero; from the courtroom page this
+    // navigates home instead of scrolling to a control that is not there.
+    if (!input) {
+      window.location.assign("/#top");
+      return;
+    }
+
+    input.focus();
     document.getElementById("top")?.scrollIntoView({
       behavior: "auto",
       block: "start",

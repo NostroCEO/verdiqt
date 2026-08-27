@@ -67,7 +67,7 @@ export function AgentSandbox() {
       <div className="grid gap-5 border-b border-border/90 px-6 py-10 sm:px-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-end">
         <div>
           <p className="font-mono text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            <span className="mr-2 text-primary">[04]</span>
+            <span className="mr-2 text-primary">[02]</span>
             Agent access
           </p>
           <h2

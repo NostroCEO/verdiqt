@@ -29,7 +29,7 @@ export function ClosingBand() {
       <div className="grid gap-8 px-6 py-24 sm:px-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
         <div>
           <p className="font-mono text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">
-            <span className="mr-2 text-primary">[06]</span>
+            <span className="mr-2 text-primary">[05]</span>
             Open the case
           </p>
           <h2

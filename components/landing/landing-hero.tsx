@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { ArrowRight, Check, FolderGit2, Lightbulb } from "lucide-react";
 
@@ -97,6 +98,7 @@ function HalftoneGavel() {
 }
 
 export function LandingHero() {
+  const router = useRouter();
   const [mode, setMode] = useState<IntakeMode>("repo");
   const [value, setValue] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -137,26 +139,14 @@ export function LandingHero() {
         : trimmed.split(/\s+/).slice(0, 4).join(" ");
 
     setHasError(false);
-    setFeedback("CASE " + caseName.toUpperCase() + " LOADED INTO PHASE 1 BELOW.");
+    setFeedback("CASE " + caseName.toUpperCase() + " OPENED. ENTERING THE COURTROOM.");
 
-    window.dispatchEvent(
-      new CustomEvent("verdiqt:preview-start", {
-        detail: {
-          caseName,
-          source: trimmed,
-          inputType: mode,
-        },
-      }),
-    );
-
-    window.requestAnimationFrame(() => {
-      document.getElementById("trial-preview")?.scrollIntoView({
-        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-          ? "auto"
-          : "smooth",
-        block: "start",
-      });
+    const params = new URLSearchParams({
+      case: caseName,
+      source: trimmed,
+      type: mode,
     });
+    router.push("/trial?" + params.toString());
   }
 
   return (
