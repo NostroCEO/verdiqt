@@ -183,6 +183,28 @@
   --ring: #526fe3;
 }
 
+.editorial-dark-frame {
+  color-scheme: dark;
+  --background: #111214;
+  --foreground: #f4f3f1;
+  --card: #17181b;
+  --card-foreground: #f4f3f1;
+  --popover: #1d1f23;
+  --popover-foreground: #f4f3f1;
+  --primary: #6e8bff;
+  --primary-soft: #aebaff;
+  --primary-foreground: #ffffff;
+  --secondary: #1d1f23;
+  --secondary-foreground: #f4f3f1;
+  --muted: #1d1f23;
+  --muted-foreground: #a5a6a9;
+  --surface: #17181b;
+  --surface-2: #1d1f23;
+  --border: #35373c;
+  --input: #35373c;
+  --ring: #6e8bff;
+}
+
 .court-line {
   border: 1px solid color-mix(in srgb, var(--primary) 16%, transparent);
   background: linear-gradient(

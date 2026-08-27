@@ -19,7 +19,7 @@ const modes: Array<{
   {
     id: "repo",
     label: "Public GitHub repo",
-    helper: "PUBLIC REPOSITORIES ONLY. NOTHING LEAVES THIS PREVIEW.",
+    helper: "PUBLIC REPOSITORIES ONLY. LIVE RESEARCH IS NOT CONNECTED YET.",
     placeholder: "https://github.com/you/your-saas",
   },
   {
@@ -43,7 +43,13 @@ function isGitHubRepository(value: string) {
 
     return (
       (url.hostname === "github.com" || url.hostname === "www.github.com") &&
-      parts.length >= 2
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      !url.username &&
+      !url.password &&
+      !url.port &&
+      !url.search &&
+      !url.hash &&
+      parts.length === 2
     );
   } catch {
     return false;
@@ -98,7 +104,7 @@ export function LandingHero() {
   const [mode, setMode] = useState<IntakeMode>("repo");
   const [value, setValue] = useState("");
   const [feedback, setFeedback] = useState(
-    "INTERACTIVE PRODUCT PREVIEW. LIVE RESEARCH IS NOT CONNECTED YET.",
+    "PHASE 1 PREVIEW ONLY. LIVE RESEARCH IS NOT CONNECTED YET.",
   );
   const [hasError, setHasError] = useState(false);
 
@@ -110,8 +116,8 @@ export function LandingHero() {
     setHasError(false);
     setFeedback(
       nextMode === "repo"
-        ? "PUBLIC REPOSITORIES ONLY. NOTHING LEAVES THIS PREVIEW."
-        : "WRITE ONE CLEAR SENTENCE. NOTHING LEAVES THIS PREVIEW.",
+        ? "PUBLIC REPOSITORIES ONLY. LIVE RESEARCH IS NOT CONNECTED YET."
+        : "WRITE ONE CLEAR SENTENCE. LIVE RESEARCH IS NOT CONNECTED YET.",
     );
   }
 
@@ -141,15 +147,14 @@ export function LandingHero() {
         : trimmed.split(/\s+/).slice(0, 4).join(" ");
 
     setHasError(false);
-    setFeedback(
-      "CASE " + caseName.toUpperCase() + " OPENING IN THE PRODUCT PREVIEW BELOW.",
-    );
+    setFeedback("CASE " + caseName.toUpperCase() + " LOADED INTO PHASE 1 BELOW.");
 
     window.dispatchEvent(
       new CustomEvent("verdiqt:preview-start", {
         detail: {
           caseName,
           source: trimmed,
+          inputType: mode,
         },
       }),
     );
@@ -226,7 +231,7 @@ export function LandingHero() {
                       onClick={() => selectMode(item.id)}
                       className={cn(
                         "relative min-h-11 border-r border-border px-3 font-mono text-[0.7rem] uppercase tracking-[0.1em] outline-none transition-colors last:border-r-0 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-                        selected
+                      selected
                           ? "bg-foreground text-background"
                           : "bg-background text-muted-foreground hover:text-foreground",
                       )}

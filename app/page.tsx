@@ -2,7 +2,7 @@ import { Gavel } from "lucide-react";
 
 import { TechnologyStack } from "@/components/landing/technology-stack";
 import { LandingHero } from "@/components/landing/landing-hero";
-import { TrialDemo } from "@/components/landing/trial-demo";
+import { TrialDashboard } from "@/components/landing/trial-demo";
 import { Badge } from "@/components/ui/badge";
 
 export default function Home() {
@@ -29,14 +29,14 @@ export default function Home() {
               The stack
             </a>
             <a className="transition-colors hover:text-foreground" href="#how-it-works">
-              Product demo
+              Dashboard
             </a>
           </nav>
 
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-2 text-xs font-medium text-muted-foreground sm:inline-flex">
               <span className="size-1.5 rounded-full bg-build shadow-[0_0_12px_var(--build)]" />
-              Foundation live
+              Build in progress
             </span>
             <Badge variant="outline" className="border-border/90 bg-background font-mono text-[0.62rem] tracking-[0.08em]">
               Human-led
@@ -47,7 +47,7 @@ export default function Home() {
 
       <LandingHero />
       <TechnologyStack />
-      <TrialDemo />
+      <TrialDashboard />
 
       <section className="border-y border-border/80 bg-card/35 px-5 py-14 sm:px-8 lg:px-10">
         <div className="mx-auto flex max-w-7xl flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
