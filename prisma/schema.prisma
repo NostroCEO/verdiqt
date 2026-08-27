@@ -1,0 +1,295 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_DATABASE_URL")
+  extensions = [vector]
+}
+
+enum TrialStatus {
+  QUEUED
+  NORMALIZING
+  GATHERING
+  CLASSIFYING
+  SCORING
+  COMPLETE
+  FAILED
+}
+
+enum VerdictKind {
+  BUILD
+  PIVOT
+  KILL
+}
+
+enum Dimension {
+  PROBLEM_SEVERITY
+  DEMAND_SIGNALS
+  COMPETITION
+  MONETIZATION
+  DISTRIBUTION
+  BUILD_COST
+}
+
+enum EvidenceSource {
+  WEB_SEARCH
+  REDDIT
+  HACKERNEWS
+  PRODUCT_HUNT
+  GITHUB
+}
+
+enum HumanState {
+  NEUTRAL
+  PINNED
+  REJECTED
+}
+
+enum Actor {
+  HUMAN
+  AGENT
+  SYSTEM
+}
+
+enum ApprovalKind {
+  DEEP_SCAN
+  PORTFOLIO_RANK
+}
+
+enum ApprovalState {
+  PENDING_HUMAN_APPROVAL
+  APPROVED
+  RUNNING
+  COMPLETED
+  REJECTED
+  FAILED
+  EXPIRED
+}
+
+enum PipelineRunKind {
+  FULL
+  RESCORE
+  DEEP_SCAN
+}
+
+enum PipelineRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETE
+  FAILED
+  SUPERSEDED
+}
+
+model User {
+  id             String          @id @default(cuid())
+  githubLogin    String          @unique
+  name           String?
+  avatarUrl      String?
+  createdAt      DateTime        @default(now())
+  trials         Trial[]
+  approvals      Approval[]
+  portfolioScans PortfolioScan[]
+}
+
+model AnonymousSession {
+  id             String     @id @default(cuid())
+  capabilityHash String     @unique
+  createdAt      DateTime   @default(now())
+  lastSeenAt     DateTime   @default(now()) @updatedAt
+  expiresAt      DateTime
+  trials         Trial[]
+  approvals      Approval[]
+
+  @@index([expiresAt])
+}
+
+model Trial {
+  id                 String            @id @default(cuid())
+  userId             String?
+  user               User?             @relation(fields: [userId], references: [id])
+  anonymousSessionId String?
+  anonymousSession   AnonymousSession? @relation(fields: [anonymousSessionId], references: [id])
+  ideaText           String?
+  repoUrl            String?
+  parentTrialId      String?
+  parentTrial        Trial?            @relation("TrialPivots", fields: [parentTrialId], references: [id], onDelete: SetNull)
+  pivots             Trial[]           @relation("TrialPivots")
+  status             TrialStatus       @default(QUEUED)
+  weights            Json
+  compositeScore     Int?
+  verdict            VerdictKind?
+  pivotDirection     String?
+  nextStep           Json?
+  ipHash             String?
+  pipelineRevision   Int               @default(1)
+  completedRevision  Int               @default(0)
+  createdAt          DateTime          @default(now())
+  completedAt        DateTime?
+  normalizedIdea     NormalizedIdea?
+  evidence           Evidence[]
+  scores             DimensionScore[]
+  events             TrialEvent[]
+  approvals          Approval[]
+  pipelineRuns       PipelineRun[]
+  portfolioScan      PortfolioScan?
+
+  @@index([userId, createdAt])
+  @@index([anonymousSessionId, createdAt])
+}
+
+model NormalizedIdea {
+  id         String   @id @default(cuid())
+  trialId    String   @unique
+  trial      Trial    @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  oneLiner   String
+  audience   String
+  problem    String
+  category   String
+  keywords   String[]
+  sourceHash String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Evidence {
+  id          String                       @id @default(cuid())
+  trialId     String
+  trial       Trial                        @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  source      EvidenceSource
+  url         String
+  title       String
+  snippet     String
+  dimension   Dimension
+  strength    Int
+  humanState  HumanState                   @default(NEUTRAL)
+  fingerprint String
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime                     @default(now())
+
+  @@unique([trialId, fingerprint])
+  @@index([trialId, dimension])
+}
+
+model DimensionScore {
+  id          String    @id @default(cuid())
+  trialId     String
+  trial       Trial     @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  dimension   Dimension
+  score       Int
+  rationale   String
+  evidenceIds String[]
+
+  @@unique([trialId, dimension])
+}
+
+model TrialEvent {
+  id            String       @id @default(cuid())
+  trialId       String
+  trial         Trial        @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  pipelineRunId String?
+  pipelineRun   PipelineRun? @relation(fields: [pipelineRunId], references: [id], onDelete: Cascade)
+  dedupeKey     String?      @unique
+  actor         Actor
+  kind          String
+  payload       Json
+  createdAt     DateTime     @default(now())
+
+  @@index([trialId, createdAt])
+}
+
+model PipelineRun {
+  id             String            @id @default(cuid())
+  trialId        String
+  trial          Trial             @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  revision       Int
+  kind           PipelineRunKind
+  deepDimension  Dimension?
+  jobKey         String            @unique
+  status         PipelineRunStatus @default(QUEUED)
+  attempt        Int               @default(0)
+  heartbeatAt    DateTime?
+  leaseExpiresAt DateTime?
+  errorCode      String?
+  createdAt      DateTime          @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  events         TrialEvent[]
+
+  @@unique([trialId, revision])
+  @@index([status, createdAt])
+  @@index([status, leaseExpiresAt])
+}
+
+model Approval {
+  id                 String            @id @default(cuid())
+  kind               ApprovalKind
+  state              ApprovalState     @default(PENDING_HUMAN_APPROVAL)
+  trialId            String?
+  trial              Trial?            @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  userId             String?
+  user               User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anonymousSessionId String?
+  anonymousSession   AnonymousSession? @relation(fields: [anonymousSessionId], references: [id], onDelete: Cascade)
+  requestedBy        Actor             @default(AGENT)
+  requestedRevision  Int?
+  payload            Json
+  dedupeKey          String            @unique
+  createdAt          DateTime          @default(now())
+  expiresAt          DateTime
+  decidedAt          DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  failureCode        String?
+
+  @@index([trialId, state])
+  @@index([userId, state])
+  @@index([anonymousSessionId, state])
+}
+
+model KnowledgeChunk {
+  id           String                       @id @default(cuid())
+  sourceDoc    String
+  headingIndex Int
+  tags         String[]
+  content      String
+  contentHash  String
+  embedding    Unsupported("vector(1536)")?
+  updatedAt    DateTime                     @updatedAt
+
+  @@unique([sourceDoc, headingIndex], name: "knowledge_chunk_source_heading")
+}
+
+model ApiCache {
+  key       String   @id
+  source    String
+  payload   Json
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+model PortfolioScan {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  repoFullName String
+  trialId      String?  @unique
+  trial        Trial?   @relation(fields: [trialId], references: [id], onDelete: SetNull)
+  rank         Int?
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, repoFullName])
+}
+
+model RateLimitHit {
+  id     String @id @default(cuid())
+  ipHash String
+  day    String
+  count  Int    @default(1)
+
+  @@unique([ipHash, day])
+}
