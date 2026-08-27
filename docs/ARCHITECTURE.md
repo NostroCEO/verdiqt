@@ -34,14 +34,16 @@ This document is the single source of truth for system structure. If code and th
                      (optional)
 ```
 
-## Services (all on Render, defined in render.yaml)
+## Services (all on Render, progressively defined in render.yaml)
 
 | Service | Type | Start command | Notes |
 |---|---|---|---|
-| verdiqt-web | Web Service | `pnpm start` | Next.js standalone build |
-| verdiqt-worker | Background Worker | `pnpm worker` | pg-boss consumer, no request timeouts |
+| verdiqt-web | Web Service | `pnpm start` | Next.js production server |
+| verdiqt-worker | Background Worker | `pnpm worker` | Added in Task 4; pg-boss consumer, no request timeouts |
 | verdiqt-cron | Optional Cron Job | `pnpm cron:daily` | Cut-first scope. Enable only after the core hero flow is green; daily 04:00 UTC cache cleanup + re-embed |
 | verdiqt-db | Postgres | n/a | pgvector extension enabled |
+
+The Task 2 preview Blueprint defines the web service and database only. Render Blueprints require at least one instance for a declared service, and background workers have no free instance type, so declaring the worker before its Task 4 entrypoint exists would create a paid failing service. The initial preview uses free web and Postgres instances with public trial creation and GitHub OAuth disabled. Because free Render Postgres does not provide managed PgBouncer, `DATABASE_URL` and `DIRECT_DATABASE_URL` initially use the same direct internal connection. Before public workloads, the founder must approve a paid database, enable managed PgBouncer, map `DATABASE_URL` to `connectionPoolString`, and keep `DIRECT_DATABASE_URL` on `connectionString`.
 
 ## Repository layout
 

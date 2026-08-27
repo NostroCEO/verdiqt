@@ -79,10 +79,10 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 **Interfaces:**
 - Produces: live base URL (record it in docs/STATE.md), `GET /api/health` returning `{ ok: true, sha }`.
 
-- [ ] **Step 1:** Write `render.yaml` blueprint: web service (build `corepack enable && pnpm install --frozen-lockfile && pnpm build`, start `pnpm start`), worker (start `pnpm worker`), and a Postgres instance. Set the exact Node 22 patch used locally. Keep the worker disabled until Task 4. Do not provision cron unless optional Task 18 is reached.
-- [ ] **Step 2:** Health route returns `{ ok: true, sha: process.env.RENDER_GIT_COMMIT ?? "dev" }`.
-- [ ] **Step 3:** HUMAN GATE: the founder creates the Render account/blueprint, provisions Postgres, sets env vars from `.env.example`, and connects the GitHub repo (push to GitHub happens here; repo can be private for now with Render access). Record the URL in docs/STATE.md.
-- [ ] **Step 4:** Verify `GET /api/health` on the live URL. Commit: `feat: render blueprint and health endpoint`.
+- [x] **Step 1:** Write `render.yaml` with the web service (build `corepack enable && pnpm install --frozen-lockfile && pnpm build`, start `pnpm start`) and Postgres preview, using the exact local Node 22 patch. Keep public trials and GitHub OAuth disabled. Render Blueprints cannot declare a zero-instance worker and background workers have no free plan, so Task 4 adds `verdiqt-worker` only after its entrypoint exists and the founder approves the paid instance. Do not provision cron unless optional Task 18 is reached.
+- [x] **Step 2:** Health route returns `{ ok: true, sha: process.env.RENDER_GIT_COMMIT ?? "dev" }`. Verify both branches through the production server locally.
+- [ ] **Step 3:** HUMAN GATE: the founder creates the GitHub remote and pushes the committed foundation, then creates the Render Blueprint, confirms the preview region and Postgres version, provisions Postgres, and sets the currently required env vars from `.env.example`. The checked-in no-cost preview uses an unpooled free database; choosing a paid database with managed PgBouncer is a founder spending decision required before public workloads. Record the URL in docs/STATE.md.
+- [ ] **Step 4:** Verify `GET /api/health` on the live URL and confirm its `sha` equals the deployed Git commit. Record the live proof in docs/STATE.md and commit the deployment status update.
 
 ### Task 3: Database schema and Prisma
 
@@ -111,7 +111,7 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 - [ ] **Step 3:** Implement the anonymous capability portion of `lib/access.ts`. The SSE route must resolve the current capability and verify trial ownership before opening. Unknown and foreign trial IDs return the same 404. Task 11 extends this helper for Auth.js and judge-rate behavior.
 - [ ] **Step 4:** `lib/events.ts`: `emitEvent` inserts a TrialEvent row. Query by a stable `(createdAt, id)` cursor, not id alone. The SSE route honors `Last-Event-ID`, polls newer rows every 1500 ms, and emits `id: <encoded-createdAt-and-id>\nevent: trial-event\ndata: <json>\n\n` plus a heartbeat every 15 seconds. After flushing a COMPLETE or FAILED event for the requested revision, the server closes; the client sees that terminal event and calls `.close()` so it does not enter a permanent reconnect loop.
 - [ ] **Step 5:** Tests prove deterministic cursor ordering, event `id:` frames, owner access, indistinguishable foreign IDs, network-error resume with no gaps or duplicates, terminal client close behavior, explicit reopen for a newer revision, and no duplicate rows on worker retry.
-- [ ] **Step 6:** Manual verify locally: a setup script creates an AnonymousSession, matching capability cookie, Trial, and PipelineRun; `curl -N` with that cookie shows staged events and closes, while a different capability gets 404. Enable the worker in render.yaml, redeploy, and verify worker logs on Render. Cron is not added unless optional Task 18 is reached.
+- [ ] **Step 6:** Manual verify locally: a setup script creates an AnonymousSession, matching capability cookie, Trial, and PipelineRun; `curl -N` with that cookie shows staged events and closes, while a different capability gets 404. Add the paid worker service to render.yaml after founder approval, redeploy, and verify worker logs on Render. Cron is not added unless optional Task 18 is reached.
 - [ ] **Step 7:** Commit: `feat: pg-boss worker, trial events, sse stream`.
 
 ### Task 5: Sanitization and cachedFetch (TDD)

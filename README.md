@@ -2,7 +2,7 @@
 
 **Put your SaaS idea on trial before you build it.**
 
-> Build status, 2026-08-26: the reconciled product and engineering specification is complete. Application implementation has not started. See [docs/STATE.md](docs/STATE.md) for the live handoff.
+> Build status, 2026-08-27: the editorial landing and pinned application foundation are complete. The Render Blueprint and revision-aware health route are locally verified; live provisioning is the current human gate. See [docs/STATE.md](docs/STATE.md) for the live handoff.
 
 Verdiqt is an agent-native web app where a builder and their AI agent judge a SaaS idea together, on the same page, at the same time. The agent researches: it gathers API-backed signals from Hacker News, GitHub, the live web, and optional approved sources such as Product Hunt and Reddit when configured. The human judges: approving deep scans, pinning the evidence that matters, rejecting noise, reweighting the scoring. The result is a cited, scored verdict: **BUILD**, **PIVOT**, or **KILL**, plus the one cheapest next step to prove it right or wrong.
 
@@ -57,7 +57,7 @@ Composite 70+ is **BUILD**, 40 to 69 is **PIVOT** (with a named direction), belo
 ```
 Next.js (UI + API + WebMCP registry + SSE)  ->  Render Web Service
 pg-boss worker (validation pipeline)        ->  Render Background Worker
-Daily maintenance                           ->  Render Cron
+Optional daily maintenance                  ->  Render Cron, Task 18 only
 Postgres + pgvector (data, queue, cache, RAG brain)
 Evidence: OpenAI web search, Reddit, Hacker News, Product Hunt, GitHub APIs
 ```
@@ -75,14 +75,13 @@ Deep dive: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 2. **Chrome 149+**: enable `chrome://flags/#enable-webmcp-testing`, restart, open the live URL, and use any WebMCP-capable agent surface. Tools are inspectable in DevTools under Application.
 3. **No agent**: the site works fully standalone; type an idea on the landing page.
 
-## Planned local setup
+## Local setup
 
-These commands become runnable as the implementation tasks land. Check [docs/STATE.md](docs/STATE.md) before using them.
+The web scaffold is runnable now. Database, worker, and knowledge commands become operational as their implementation tasks land. Check [docs/STATE.md](docs/STATE.md) before using them.
 
 Prereqs: Node 22, pnpm, Postgres 16+ with the `vector` extension, an OpenAI API key.
 
 ```bash
-git clone https://github.com/NostroCEO/verdiqt && cd verdiqt
 pnpm install
 cp .env.example .env        # fill in DATABASE_URL, DIRECT_DATABASE_URL, OPENAI_API_KEY, AUTH_* vars
 pnpm prisma migrate deploy
@@ -91,7 +90,7 @@ pnpm dev                     # web app on :3000
 pnpm worker                  # in a second terminal: the validation worker
 ```
 
-The deployment target is a Render Blueprint. Plan Task 2 creates `render.yaml` for the web service, worker, cron, and Postgres. Its environment contract already lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#environment-variables).
+The deployment target is a Render Blueprint. Plan Task 2 defines the web service and Postgres preview. Task 4 adds the paid worker after its queue entrypoint exists, and optional Task 18 adds cron only if the core flow is already green. The environment contract lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#environment-variables).
 
 ## Repository guide
 
