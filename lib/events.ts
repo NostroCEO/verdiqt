@@ -71,6 +71,45 @@ export async function emitEvent(input: {
   return prisma.trialEvent.create({ data });
 }
 
+// Terminal kinds close the SSE stream once flushed for the current revision.
+export const TERMINAL_EVENT_KINDS = ["trial_completed", "trial_failed"] as const;
+
+export function isTerminalEventKind(kind: string) {
+  return (TERMINAL_EVENT_KINDS as readonly string[]).includes(kind);
+}
+
+// Stable (createdAt, id) tuple pagination; id alone is not orderable and
+// createdAt alone collides within a millisecond. Uses the [trialId, createdAt]
+// index; the OR expansion is Postgres's tuple comparison spelled in Prisma.
+export async function listEventsAfter(
+  trialId: string,
+  cursor: TrialEventCursor | null,
+  limit = 200,
+) {
+  return prisma.trialEvent.findMany({
+    where: {
+      trialId,
+      ...(cursor
+        ? {
+            OR: [
+              { createdAt: { gt: cursor.createdAt } },
+              { createdAt: cursor.createdAt, id: { gt: cursor.id } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: limit,
+    select: {
+      id: true,
+      actor: true,
+      kind: true,
+      payload: true,
+      createdAt: true,
+    },
+  });
+}
+
 export function formatTrialEventSse(input: {
   id: string;
   event: unknown;

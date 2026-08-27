@@ -13,7 +13,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "worker": "tsx worker/index.ts",
     "ingest:brain": "tsx scripts/ingest-brain.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",

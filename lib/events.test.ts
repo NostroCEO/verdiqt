@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   trialEvent: {
     create: vi.fn(),
     upsert: vi.fn(),
+    findMany: vi.fn(),
   },
 }));
 
@@ -18,6 +19,7 @@ import {
   emitEvent,
   encodeTrialEventCursor,
   formatTrialEventSse,
+  listEventsAfter,
 } from "@/lib/events";
 
 describe("trial event helpers", () => {
@@ -68,6 +70,44 @@ describe("trial event helpers", () => {
   it("never emits an unparseable data frame for a missing event", () => {
     expect(formatTrialEventSse({ id: "c1", event: undefined })).toBe(
       "id: c1\nevent: trial-event\ndata: null\n\n",
+    );
+  });
+});
+
+describe("listEventsAfter", () => {
+  afterEach(() => {
+    mocks.trialEvent.findMany.mockReset();
+  });
+
+  it("orders by the (createdAt, id) tuple and scopes to the trial", async () => {
+    mocks.trialEvent.findMany.mockResolvedValue([]);
+
+    await listEventsAfter("trial_1", null);
+
+    expect(mocks.trialEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { trialId: "trial_1" },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      }),
+    );
+  });
+
+  it("expands the cursor into the strict tuple comparison", async () => {
+    mocks.trialEvent.findMany.mockResolvedValue([]);
+    const createdAt = new Date("2026-08-27T12:00:00.000Z");
+
+    await listEventsAfter("trial_1", { createdAt, id: "event_5" });
+
+    expect(mocks.trialEvent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          trialId: "trial_1",
+          OR: [
+            { createdAt: { gt: createdAt } },
+            { createdAt, id: { gt: "event_5" } },
+          ],
+        },
+      }),
     );
   });
 });
