@@ -81,8 +81,8 @@ Tests remain mocked until this gate is complete. Do not run corpus ingestion, a 
 
 - [x] **Step 1:** Write `render.yaml` with the web service (build `corepack enable && pnpm install --frozen-lockfile && pnpm build`, start `pnpm start`) and Postgres preview, using the exact local Node 22 patch. Keep public trials and GitHub OAuth disabled. Render Blueprints cannot declare a zero-instance worker and background workers have no free plan, so Task 4 adds `verdiqt-worker` only after its entrypoint exists and the founder approves the paid instance. Do not provision cron unless optional Task 18 is reached.
 - [x] **Step 2:** Health route returns `{ ok: true, sha: process.env.RENDER_GIT_COMMIT ?? "dev" }`. Verify both branches through the production server locally.
-- [ ] **Step 3:** HUMAN GATE: the founder creates the GitHub remote and pushes the committed foundation, then creates the Render Blueprint, confirms the preview region and Postgres version, provisions Postgres, and sets the currently required env vars from `.env.example`. The checked-in no-cost preview uses an unpooled free database; choosing a paid database with managed PgBouncer is a founder spending decision required before public workloads. Record the URL in docs/STATE.md.
-- [ ] **Step 4:** Verify `GET /api/health` on the live URL and confirm its `sha` equals the deployed Git commit. Record the live proof in docs/STATE.md and commit the deployment status update.
+- [x] **Step 3:** HUMAN GATE: the founder creates the GitHub remote and pushes the committed foundation, then creates the Render Blueprint, confirms the preview region and Postgres version, provisions Postgres, and sets the currently required env vars from `.env.example`. The checked-in no-cost preview uses an unpooled free database; choosing a paid database with managed PgBouncer is a founder spending decision required before public workloads. Record the URL in docs/STATE.md.
+- [x] **Step 4:** Verify `GET /api/health` on the live URL and confirm its `sha` equals the deployed Git commit. Record the live proof in docs/STATE.md and commit the deployment status update.
 
 ### Task 3: Database schema and Prisma
 
