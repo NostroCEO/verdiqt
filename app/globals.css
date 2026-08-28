@@ -331,6 +331,17 @@
   clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%);
 }
 
+/* The verdict-moment miniature: the hero gavel's exact pieces at inline
+   size, wearing a neon glow in the brand primary. */
+.editorial-gavel--mini {
+  width: 3.4rem;
+}
+
+.editorial-gavel--neon {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--primary) 85%, transparent))
+    drop-shadow(0 0 12px color-mix(in srgb, var(--primary) 45%, transparent));
+}
+
 .verdict-rings {
   background:
     radial-gradient(
