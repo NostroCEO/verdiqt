@@ -23,6 +23,14 @@ export async function bootNode() {
   }
 
   try {
+    const { ingestCorpus } = await import("@/lib/brain/ingest-run");
+    const result = await ingestCorpus();
+    console.log(`corpus ingested: ${result.chunks} chunks from ${result.files} files`);
+  } catch (error) {
+    console.error("corpus ingest failed", error);
+  }
+
+  try {
     const { startWorker } = await import("@/lib/worker-boot");
     await startWorker();
   } catch (error) {
