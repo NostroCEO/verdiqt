@@ -1,9 +1,12 @@
 import { Actor, PipelineRunKind, TrialStatus } from "@prisma/client";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { isValidJudgeCookie, JUDGE_COOKIE } from "@/lib/judge";
 import { enqueueTrial } from "@/lib/queue";
+import { checkRateLimit, hashIp } from "@/lib/ratelimit";
 import { DEFAULT_TRIAL_WEIGHTS } from "@/lib/trials/start";
 import { getOwnedTrial } from "@/lib/trials/access";
 
@@ -40,6 +43,30 @@ export async function POST(
   });
   if (!parent || !parent.anonymousSessionId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // A refine spawns a full pipeline run, so it MUST share the same daily
+  // quota as POST /api/trials (security audit 2026-08-28): otherwise an
+  // agent that owns one trial could refine in a loop and burn the shared
+  // free inference budget. The judge cookie bypasses only this ceiling.
+  const cookieStore = await cookies();
+  const judge = isValidJudgeCookie(cookieStore.get(JUDGE_COOKIE)?.value);
+  if (!judge) {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+    const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "100");
+    if (limit > 0) {
+      const { allowed } = await checkRateLimit(hashIp(`trials:${ip}`), limit);
+      if (!allowed) {
+        return NextResponse.json(
+          {
+            error: "rate_limited",
+            retry_hint: "The daily limit resets at midnight UTC.",
+          },
+          { status: 429 },
+        );
+      }
+    }
   }
 
   const created = await prisma.$transaction(async (tx) => {

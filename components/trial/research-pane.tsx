@@ -13,7 +13,7 @@ import {
 import { StageChecklist } from "@/components/trial/stage-checklist";
 import type { LiveEvidenceItem } from "@/lib/hooks/use-trial-live";
 import type { TrialStatusValue } from "@/lib/trial-progress";
-import { cn } from "@/lib/utils";
+import { cn, safeHttpUrl } from "@/lib/utils";
 
 // Official platform marks (founder rule 2026-08-28): the research feed shows
 // exactly where each piece of evidence comes from. WEB_SEARCH is served by
@@ -167,7 +167,7 @@ export function ResearchPane({
                       {SOURCES[item.source]?.label ?? item.source}
                     </span>
                     <a
-                      href={item.url}
+                      href={safeHttpUrl(item.url)}
                       target="_blank"
                       rel="noreferrer"
                       className="min-w-0 flex-1 truncate text-xs text-foreground hover:text-primary"

@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 
 import { LiveVerdictPanel, scoreToneClass } from "@/components/landing/live-verdict-panel";
 import type { LiveTrialState } from "@/lib/hooks/use-trial-live";
-import { cn } from "@/lib/utils";
+import { cn, safeHttpUrl } from "@/lib/utils";
 
 // Human explanations for the pipeline's typed error codes.
 export function explainErrorCode(code: string | null): string {
@@ -138,7 +138,7 @@ export function VerdictPane({
                             {cited.map((item) => (
                               <li key={item.id} className="flex items-center gap-2">
                                 <a
-                                  href={item.url}
+                                  href={safeHttpUrl(item.url)}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="min-w-0 flex-1 truncate text-[0.68rem] text-foreground underline decoration-border underline-offset-2 hover:text-primary"
