@@ -20,11 +20,28 @@ type PhResponse = {
   data?: { posts?: { edges?: Array<{ node: PhPost }> } };
 };
 
-const POSTS_QUERY = `query($first: Int!) {
+const TOPIC_QUERY = `query($first: Int!, $topic: String!) {
+  posts(first: $first, topic: $topic, order: VOTES) {
+    edges { node { name tagline url votesCount createdAt } }
+  }
+}`;
+
+const TRENDING_QUERY = `query($first: Int!) {
   posts(first: $first, order: VOTES) {
     edges { node { name tagline url votesCount createdAt } }
   }
 }`;
+
+// Product Hunt's v2 API filters posts by topic slug, not free text; the
+// idea's category slugified usually lands on a real topic ("FinTech" ->
+// "fintech"). An unknown topic returns empty edges, so trending is the
+// fallback rather than the default — evidence should be ABOUT the case.
+function topicSlug(category: string) {
+  return category
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 // Token-gated: without PRODUCT_HUNT_TOKEN the adapter returns [] and the
 // pipeline emits source_disabled once per trial.
@@ -41,31 +58,40 @@ export const productHuntAdapter: EvidenceAdapter = {
       return [];
     }
 
+    const slug = topicSlug(idea.category);
+
+    async function phQuery(query: string, variables: Record<string, unknown>) {
+      const response = await fetch("https://api.producthunt.com/v2/api/graphql", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`producthunt_http_${response.status}`);
+      }
+
+      return (await response.json()) as PhResponse;
+    }
+
     const data = await cachedFetch<PhResponse>(
       "PRODUCT_HUNT",
-      `posts:${idea.category}`,
+      `topic:${slug}`,
       CACHE_TTL_HOURS.PRODUCT_HUNT,
       async () => {
-        const response = await fetch(
-          "https://api.producthunt.com/v2/api/graphql",
-          {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              query: POSTS_QUERY,
-              variables: { first: MAX_ITEMS_PER_SOURCE },
-            }),
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(`producthunt_http_${response.status}`);
+        if (slug) {
+          const byTopic = await phQuery(TOPIC_QUERY, {
+            first: MAX_ITEMS_PER_SOURCE,
+            topic: slug,
+          });
+          if ((byTopic.data?.posts?.edges ?? []).length > 0) {
+            return byTopic;
+          }
         }
-
-        return (await response.json()) as PhResponse;
+        return phQuery(TRENDING_QUERY, { first: MAX_ITEMS_PER_SOURCE });
       },
     );
 
