@@ -482,6 +482,8 @@ export function TrialDashboard({
                         evidence={live.evidence}
                         sourceStates={live.sourceStates}
                         runId={runId}
+                        errorCode={live.errorCode}
+                        failedAtStage={live.failedAtStage}
                       />
                     ) : (
                       <VerdictPane

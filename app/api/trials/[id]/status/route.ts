@@ -142,6 +142,7 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
   // A FAILED trial names its reason (our own typed error strings, safe to
   // expose): nobody should have to guess why a run died.
   let errorCode: string | null = null;
+  let failedAtStage: string | null = null;
   if (trial.status === "FAILED") {
     const failedRun = await prisma.pipelineRun.findFirst({
       where: { trialId: trial.id, status: "FAILED" },
@@ -149,6 +150,14 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
       select: { errorCode: true },
     });
     errorCode = failedRun?.errorCode ?? null;
+
+    const failEvent = await prisma.trialEvent.findFirst({
+      where: { trialId: trial.id, kind: "trial_failed" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { payload: true },
+    });
+    const payload = failEvent?.payload as Record<string, unknown> | null;
+    failedAtStage = typeof payload?.stage === "string" ? payload.stage : null;
   }
 
   // Per-source research states (founder demand: the user sees every search
@@ -217,6 +226,7 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
     created_at: trial.createdAt,
     completed_at: trial.completedAt,
     error_code: errorCode,
+    failed_at_stage: failedAtStage,
     source_states: sourceStates,
     case_file: trial.normalizedIdea
       ? {

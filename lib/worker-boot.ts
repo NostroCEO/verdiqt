@@ -6,6 +6,10 @@ import { claimRun, runPipeline } from "@/worker/pipeline";
 export async function startWorker() {
   const boss = await getStartedBoss();
 
+  boss.on("error", (error) => {
+    console.error("pg-boss error:", error);
+  });
+
   await boss.work<RunTrialJob>(RUN_TRIAL_QUEUE, async (jobs) => {
     for (const job of jobs) {
       const { pipelineRunId } = job.data;

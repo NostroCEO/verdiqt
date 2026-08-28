@@ -59,6 +59,7 @@ export type LiveTrialState = {
   workerSeen: boolean;
   error: string | null;
   errorCode: string | null;
+  failedAtStage: string | null;
 };
 
 const initialState: LiveTrialState = {
@@ -81,6 +82,7 @@ const initialState: LiveTrialState = {
   workerSeen: false,
   error: null,
   errorCode: null,
+  failedAtStage: null,
 };
 
 const STATUS_POLL_MS = 5000;
@@ -218,6 +220,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           composite_score: number | null;
           verdict: string | null;
           error_code?: string | null;
+          failed_at_stage?: string | null;
           source_states?: Record<string, { state: string; count: number }>;
           case_file?: {
             one_liner: string;
@@ -241,6 +244,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           compositeScore: body.composite_score,
           verdict: body.verdict,
           errorCode: body.error_code ?? null,
+          failedAtStage: body.failed_at_stage ?? null,
           sourceStates: body.source_states ?? current.sourceStates,
           caseFile: body.case_file
             ? {

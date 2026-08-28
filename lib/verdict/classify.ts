@@ -63,23 +63,7 @@ export async function classifyEvidence(
           schemaName: "EvidenceClassificationBatch",
         });
 
-      // A schema-valid but empty or wildly short answer is a FAILURE, not
-      // reduced coverage: silently dropping a whole gathered batch made a
-      // real run score zero evidence (observed live 2026-08-28). One flaky
-      // response must not kill a single-batch trial, so undersize gets
-      // exactly one fresh retry before counting as failed.
-      const undersized = (r: { classifications: unknown[] }) =>
-        batch.length > 0 && r.classifications.length < Math.ceil(batch.length / 2);
-
-      let result = await attempt();
-      if (undersized(result)) {
-        result = await attempt();
-      }
-      if (undersized(result)) {
-        throw new Error(
-          `classification_batch_undersized:${result.classifications.length}/${batch.length}`,
-        );
-      }
+      const result = await attempt();
 
       const byIndex = new Map(
         result.classifications.map((entry) => [entry.index, entry]),

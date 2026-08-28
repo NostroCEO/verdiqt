@@ -47,12 +47,14 @@ export function ResearchPane({
   sourceStates = {},
   runId = null,
   errorCode = null,
+  failedAtStage = null,
 }: {
   status: TrialStatusValue;
   evidence: LiveEvidenceItem[];
   sourceStates?: Record<string, { state: string; count: number }>;
   runId?: string | null;
   errorCode?: string | null;
+  failedAtStage?: string | null;
 }) {
   const researching =
     status === "NORMALIZING" || status === "GATHERING" || status === "CLASSIFYING";
@@ -85,7 +87,7 @@ export function ResearchPane({
         <p className="mb-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
           The procedure
         </p>
-        <StageChecklist status={status} />
+        <StageChecklist status={status} failedAtStage={failedAtStage} />
       </div>
 
       <div className="min-w-0">

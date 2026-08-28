@@ -392,12 +392,19 @@ export async function runPipeline(pipelineRunId: string) {
 
     await stageScoreAndCompose(ctx, idea);
   } catch (error) {
+    const current = await prisma.trial.findUnique({
+      where: { id: run.trialId },
+      select: { status: true },
+    });
+    const failedAtStage = current?.status !== "FAILED" ? current?.status : null;
+    const errorCode = error instanceof Error ? error.message.slice(0, 120) : "unknown";
+
     await prisma.pipelineRun.update({
       where: { id: run.id },
       data: {
         status: PipelineRunStatus.FAILED,
         completedAt: new Date(),
-        errorCode: error instanceof Error ? error.message.slice(0, 120) : "unknown",
+        errorCode,
       },
     });
     await prisma.trial.update({
@@ -410,9 +417,8 @@ export async function runPipeline(pipelineRunId: string) {
       actor: Actor.SYSTEM,
       kind: "trial_failed",
       dedupeKey: `${run.id}:trial_failed`,
-      payload: { revision: run.revision },
+      payload: { revision: run.revision, stage: failedAtStage },
     });
-    throw error;
   }
 }
 

@@ -16,8 +16,14 @@ const STAGE_LABELS: Record<(typeof PIPELINE_STAGES)[number], string> = {
 // The designed loading state: four stage rows that narrate the run. Done
 // rows look done (check + primary), the running row pulses its marker via a
 // finite-feeling spring driven by state changes only.
-export function StageChecklist({ status }: { status: TrialStatusValue }) {
-  const states = stageStates(status);
+export function StageChecklist({
+  status,
+  failedAtStage,
+}: {
+  status: TrialStatusValue;
+  failedAtStage?: string | null;
+}) {
+  const states = stageStates(status, failedAtStage);
 
   return (
     <ol aria-label="Pipeline stages" className="border border-border bg-background">

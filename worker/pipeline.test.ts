@@ -161,11 +161,11 @@ describe("runPipeline (real stages)", () => {
     expect(mocks.trial.update).not.toHaveBeenCalled();
   });
 
-  it("a stage failure marks run and trial FAILED with the error code and rethrows", async () => {
+  it("a stage failure marks run and trial FAILED with the error code", async () => {
     primeHappyPath();
     mocks.normalizeIdea.mockRejectedValue(new Error("llm_schema_violation:NormalizedIdea"));
 
-    await expect(runPipeline("run_1")).rejects.toThrow("llm_schema_violation");
+    await runPipeline("run_1");
 
     expect(mocks.pipelineRun.update).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -59,6 +59,7 @@ export type StageState = "pending" | "running" | "done" | "failed";
 // The research checklist rows: every stage before the current one is done.
 export function stageStates(
   status: TrialStatusValue,
+  failedAtStage?: string | null,
 ): Record<(typeof PIPELINE_STAGES)[number], StageState> {
   const order: TrialStatusValue[] = [...PIPELINE_STAGES, "COMPLETE"];
   const currentIndex =
@@ -70,8 +71,17 @@ export function stageStates(
 
   PIPELINE_STAGES.forEach((stage, index) => {
     if (status === "FAILED") {
-      // Without a persisted failure stage we mark the first incomplete one.
-      result[stage] = index === 0 ? "failed" : "pending";
+      const failIndex = failedAtStage
+        ? PIPELINE_STAGES.indexOf(failedAtStage as (typeof PIPELINE_STAGES)[number])
+        : 0;
+      const effectiveFailIndex = failIndex === -1 ? 0 : failIndex;
+      if (index < effectiveFailIndex) {
+        result[stage] = "done";
+      } else if (index === effectiveFailIndex) {
+        result[stage] = "failed";
+      } else {
+        result[stage] = "pending";
+      }
       return;
     }
     if (status === "COMPLETE" || index < currentIndex) {

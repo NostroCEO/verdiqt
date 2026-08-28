@@ -18,8 +18,6 @@ export function isGitHubRepository(value: string) {
       !url.username &&
       !url.password &&
       !url.port &&
-      !url.search &&
-      !url.hash &&
       parts.length === 2
     );
   } catch {
@@ -49,11 +47,20 @@ export async function startTrialRequest(
   const caseName = caseNameFrom(mode, value);
 
   try {
+    let repoUrl = value;
+    if (mode === "repo") {
+      const full = value.startsWith("http") ? value : `https://${value}`;
+      const parsed = new URL(full);
+      parsed.search = "";
+      parsed.hash = "";
+      repoUrl = parsed.toString().replace(/\/$/, "");
+    }
+
     const response = await fetch("/api/trials", {
       method: "POST",
       headers: { "content-type": "application/json" },
       credentials: "include",
-      body: JSON.stringify(mode === "repo" ? { repoUrl: value } : { ideaText: value }),
+      body: JSON.stringify(mode === "repo" ? { repoUrl } : { ideaText: value }),
     });
 
     if (response.status === 202) {
