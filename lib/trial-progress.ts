@@ -26,6 +26,10 @@ export function phaseIndexFor(status: TrialStatusValue): number {
     return 1;
   }
   if (status === "COMPLETE") return 2;
+  // A failed run keeps the user on the research phase, where the failure
+  // banner names the reason — never silently back on intake (founder bug
+  // report 2026-08-28).
+  if (status === "FAILED") return 1;
   return 0;
 }
 

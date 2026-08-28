@@ -55,7 +55,7 @@ function extractJson(raw: string): unknown {
   return JSON.parse(trimmed.slice(start, end + 1));
 }
 
-const RATE_LIMIT_WAITS_MS = [10_000, 25_000, 60_000];
+const RATE_LIMIT_WAITS_MS = [10_000, 25_000];
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -68,6 +68,25 @@ function isRateLimit(error: unknown): boolean {
     "status" in error &&
     (error as { status?: number }).status === 429
   );
+}
+
+// A per-MINUTE limit clears within our short waits; a per-DAY limit will
+// not clear for hours, and waiting on it wedged the serial worker behind
+// half-hour zombie trials (observed live 2026-08-28). Daily exhaustion must
+// fail fast with a typed error the UI can explain honestly.
+function isDailyExhaustion(error: unknown): boolean {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message?: unknown }).message).toLowerCase()
+      : "";
+  if (/per day|tpd|rpd|daily/.test(message)) return true;
+
+  const headers =
+    typeof error === "object" && error !== null && "headers" in error
+      ? (error as { headers?: { get?: (name: string) => string | null } }).headers
+      : undefined;
+  const retryAfter = Number(headers?.get?.("retry-after") ?? 0);
+  return retryAfter > 120;
 }
 
 // One structured call: JSON-mode request, zod validation, exactly one repair
@@ -105,11 +124,17 @@ export async function structuredCall<T>(input: {
         return await rawRequest(repairNote);
       } catch (error) {
         if (!isRateLimit(error)) throw error;
-        console.warn(`groq 429; waiting ${waitMs}ms before retrying`);
+        if (isDailyExhaustion(error)) throw new Error("llm_rate_limited");
+        console.warn(`inference 429; waiting ${waitMs}ms before retrying`);
         await sleep(waitMs);
       }
     }
-    return rawRequest(repairNote);
+    try {
+      return await rawRequest(repairNote);
+    } catch (error) {
+      if (isRateLimit(error)) throw new Error("llm_rate_limited");
+      throw error;
+    }
   };
 
   const first = await request();

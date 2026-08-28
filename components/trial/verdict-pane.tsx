@@ -18,6 +18,9 @@ export function explainErrorCode(code: string | null): string {
   if (code.includes("INFERENCE_API_KEY")) {
     return "The scoring model is not configured on the server yet.";
   }
+  if (code.includes("llm_rate_limited")) {
+    return "The court's free reasoning quota is exhausted for now. It refills automatically — try again in a while (quotas reset daily at midnight UTC).";
+  }
   if (code.startsWith("llm_") || code.startsWith("classification")) {
     return "The scoring model returned an unusable answer. Filing again usually succeeds.";
   }

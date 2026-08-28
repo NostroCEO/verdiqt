@@ -11,6 +11,7 @@ import {
   StackOverflowMark,
 } from "@/components/icons/brand-icons";
 import { StageChecklist } from "@/components/trial/stage-checklist";
+import { explainErrorCode } from "@/components/trial/verdict-pane";
 import type { LiveEvidenceItem } from "@/lib/hooks/use-trial-live";
 import type { TrialStatusValue } from "@/lib/trial-progress";
 import { cn, safeHttpUrl } from "@/lib/utils";
@@ -45,11 +46,13 @@ export function ResearchPane({
   evidence,
   sourceStates = {},
   runId = null,
+  errorCode = null,
 }: {
   status: TrialStatusValue;
   evidence: LiveEvidenceItem[];
   sourceStates?: Record<string, { state: string; count: number }>;
   runId?: string | null;
+  errorCode?: string | null;
 }) {
   const researching =
     status === "NORMALIZING" || status === "GATHERING" || status === "CLASSIFYING";
@@ -71,7 +74,13 @@ export function ResearchPane({
   }
 
   return (
-    <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
+    <div>
+      {status === "FAILED" ? (
+        <p className="mb-3 border-l-2 border-kill bg-kill/10 px-3 py-2 text-xs text-foreground">
+          The trial failed during this phase. {explainErrorCode(errorCode)}
+        </p>
+      ) : null}
+      <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
       <div>
         <p className="mb-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
           The procedure
@@ -262,6 +271,7 @@ export function ResearchPane({
             </AnimatePresence>
           </ul>
         )}
+      </div>
       </div>
     </div>
   );
