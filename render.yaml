@@ -27,7 +27,7 @@ services:
           name: verdiqt-db
           property: connectionString
       - key: RATE_LIMIT_TRIALS_PER_DAY
-        value: "15"
+        value: "100"
       - key: PUBLIC_TRIALS_ENABLED
         value: "true"
       - key: GITHUB_OAUTH_ENABLED

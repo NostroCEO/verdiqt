@@ -116,17 +116,23 @@ export async function POST(request: Request) {
     if (!judge) {
       const ip =
         request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-      const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "15");
-      const { allowed } = await checkRateLimit(hashIp(`trials:${ip}`), limit);
+      // Founder decision 2026-08-28: cases are effectively unlimited for
+      // humans. The ceiling exists ONLY so a runaway script cannot burn the
+      // shared free inference quota that powers everyone's trials; 0 or a
+      // negative value disables the check entirely.
+      const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "100");
+      if (limit > 0) {
+        const { allowed } = await checkRateLimit(hashIp(`trials:${ip}`), limit);
 
-      if (!allowed) {
-        return NextResponse.json(
-          {
-            error: "rate_limited",
-            retry_hint: "The daily limit resets at midnight UTC.",
-          },
-          { status: 429 },
-        );
+        if (!allowed) {
+          return NextResponse.json(
+            {
+              error: "rate_limited",
+              retry_hint: "The daily limit resets at midnight UTC.",
+            },
+            { status: 429 },
+          );
+        }
       }
     }
     const trial = await startTrial({ ...parsed.data, cookieStore });
