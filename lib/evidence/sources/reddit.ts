@@ -21,6 +21,52 @@ type RedditChild = {
 
 type RedditListing = { data?: { children?: RedditChild[] } };
 
+const USER_AGENT =
+  "web:verdiqt:1.0 (SaaS validation research; github.com/NostroCEO/verdiqt)";
+
+// Reddit blocks anonymous requests from cloud IPs, but authenticated OAuth
+// (free registered app, client_credentials grant) is served normally. The
+// bearer token lives ~24h; cache it in-process and refresh early.
+let cachedToken: { value: string; expiresAt: number } | null = null;
+
+async function redditBearerToken(): Promise<string | null> {
+  const clientId = process.env.REDDIT_CLIENT_ID;
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+
+  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
+    return cachedToken.value;
+  }
+
+  const response = await fetch("https://www.reddit.com/api/v1/access_token", {
+    method: "POST",
+    headers: {
+      authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "User-Agent": USER_AGENT,
+    },
+    body: "grant_type=client_credentials",
+  });
+
+  if (!response.ok) {
+    throw new Error(`reddit_oauth_${response.status}`);
+  }
+
+  const body = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+  };
+  if (!body.access_token) {
+    throw new Error("reddit_oauth_no_token");
+  }
+
+  cachedToken = {
+    value: body.access_token,
+    expiresAt: Date.now() + (body.expires_in ?? 3600) * 1000,
+  };
+  return body.access_token;
+}
+
 // ENABLED by founder decision (2026-08-28, supersedes the earlier gate):
 // live at-trial-time research through Reddit's public JSON search with an
 // honest client identity, nothing stored beyond the 12h ApiCache row. Reddit
@@ -38,12 +84,16 @@ export const redditAdapter: EvidenceAdapter = {
       `search:${query}`,
       CACHE_TTL_HOURS.REDDIT,
       async () => {
+        const bearer = await redditBearerToken();
+        const params = `q=${encodeURIComponent(query)}&sort=relevance&t=year&limit=${MAX_ITEMS_PER_SOURCE * 2}&raw_json=1`;
         const response = await fetch(
-          `https://www.reddit.com/search.json?q=${encodeURIComponent(query)}&sort=relevance&t=year&limit=${MAX_ITEMS_PER_SOURCE * 2}&raw_json=1`,
+          bearer
+            ? `https://oauth.reddit.com/search?${params}`
+            : `https://www.reddit.com/search.json?${params}`,
           {
             headers: {
-              "User-Agent":
-                "web:verdiqt:1.0 (SaaS validation research; github.com/NostroCEO/verdiqt)",
+              "User-Agent": USER_AGENT,
+              ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
             },
           },
         );
