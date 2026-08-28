@@ -28,7 +28,10 @@ vi.mock("@/lib/verdict/normalize", () => ({ normalizeIdea: mocks.normalizeIdea }
 vi.mock("@/lib/evidence/gather", () => ({ gatherAll: mocks.gatherAll }));
 vi.mock("@/lib/verdict/classify", () => ({ classifyEvidence: mocks.classifyEvidence }));
 vi.mock("@/lib/verdict/score", () => ({ scoreDimension: mocks.scoreDimension }));
-vi.mock("@/lib/brain/retrieve", () => ({ retrieveKnowledge: mocks.retrieveKnowledge }));
+vi.mock("@/lib/brain/retrieve", () => ({
+  retrieveKnowledge: mocks.retrieveKnowledge,
+  retrieveGrounding: mocks.retrieveKnowledge,
+}));
 
 import { claimRun, runPipeline } from "@/worker/pipeline";
 

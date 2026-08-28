@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { scoreToneClass } from "@/components/landing/live-verdict-panel";
 import { cn } from "@/lib/utils";
 
 type ArchivedCase = {
@@ -71,6 +72,16 @@ export function ArchiveRail({
               <span className="min-w-0 flex-1 truncate text-[0.68rem] text-foreground">
                 {entry.case_label}
               </span>
+              {entry.composite_score !== null ? (
+                <span
+                  className={cn(
+                    "shrink-0 font-mono text-[0.5rem]",
+                    scoreToneClass(entry.composite_score),
+                  )}
+                >
+                  {entry.composite_score}
+                </span>
+              ) : null}
               <span
                 className={cn(
                   "shrink-0 border px-1 py-0.5 font-mono text-[0.46rem] uppercase tracking-[0.06em]",

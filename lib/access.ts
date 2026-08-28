@@ -27,6 +27,27 @@ export type Principal = {
   anonymousSessionId: string;
 };
 
+// The poll routes resolve the principal on every request (status 5s,
+// evidence 2.5s, SSE connects); the capabilityHash -> session mapping is
+// immutable apart from its sliding expiry, so a short in-process cache
+// removes one DB read per poll with no correctness risk.
+const PRINCIPAL_CACHE_TTL_MS = 60 * 1000;
+const PRINCIPAL_CACHE_MAX = 1000;
+const principalCache = new Map<
+  string,
+  { id: string; expiresAt: number; cachedAt: number }
+>();
+
+// The 30-day expiry slides on every request; rewriting the row on every
+// 2.5s poll is pure write churn. Refresh at most once per 6 hours — the
+// visible TTL never drops below 30 days minus 6 hours.
+const EXPIRY_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+function shouldRefreshExpiry(expiresAt: Date, now: Date) {
+  const fullTtl = ANONYMOUS_SESSION_TTL_DAYS * DAY_MS;
+  return expiresAt.getTime() - now.getTime() < fullTtl - EXPIRY_REFRESH_INTERVAL_MS;
+}
+
 export function createAnonymousCapability() {
   return randomBytes(32).toString("base64url");
 }
@@ -69,10 +90,13 @@ export async function resolveAnonymousPrincipal(
     });
 
     if (existingSession && existingSession.expiresAt > now) {
-      await prisma.anonymousSession.update({
-        where: { id: existingSession.id },
-        data: { expiresAt: anonymousSessionExpiresAt(now) },
-      });
+      if (shouldRefreshExpiry(existingSession.expiresAt, now)) {
+        await prisma.anonymousSession.update({
+          where: { id: existingSession.id },
+          data: { expiresAt: anonymousSessionExpiresAt(now) },
+        });
+        principalCache.delete(currentHash);
+      }
       cookieStore.set(
         ANONYMOUS_SESSION_COOKIE,
         currentCapability,
@@ -118,24 +142,46 @@ export async function resolveCurrentAnonymousPrincipal(
   }
 
   const currentHash = hashCapability(currentCapability);
+
+  const cached = principalCache.get(currentHash);
+  if (
+    cached &&
+    cached.cachedAt + PRINCIPAL_CACHE_TTL_MS > now.getTime() &&
+    cached.expiresAt > now.getTime()
+  ) {
+    return { kind: "anonymous", anonymousSessionId: cached.id };
+  }
+
   const existingSession = await prisma.anonymousSession.findUnique({
     where: { capabilityHash: currentHash },
     select: { id: true, expiresAt: true },
   });
 
   if (!existingSession || existingSession.expiresAt <= now) {
+    principalCache.delete(currentHash);
     return null;
   }
 
-  await prisma.anonymousSession.update({
-    where: { id: existingSession.id },
-    data: { expiresAt: anonymousSessionExpiresAt(now) },
-  });
+  if (shouldRefreshExpiry(existingSession.expiresAt, now)) {
+    await prisma.anonymousSession.update({
+      where: { id: existingSession.id },
+      data: { expiresAt: anonymousSessionExpiresAt(now) },
+    });
+  }
   cookieStore.set(
     ANONYMOUS_SESSION_COOKIE,
     currentCapability,
     anonymousCookieOptions(),
   );
+
+  if (principalCache.size > PRINCIPAL_CACHE_MAX) {
+    principalCache.clear();
+  }
+  principalCache.set(currentHash, {
+    id: existingSession.id,
+    expiresAt: existingSession.expiresAt.getTime(),
+    cachedAt: now.getTime(),
+  });
 
   return {
     kind: "anonymous",

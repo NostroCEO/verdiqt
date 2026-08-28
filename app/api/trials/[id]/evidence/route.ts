@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { microCached } from "@/lib/micro-cache";
 import { getOwnedTrial } from "@/lib/trials/access";
 
 export const runtime = "nodejs";
@@ -39,14 +40,22 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const rows = await prisma.evidence.findMany({
-    where: {
-      trialId: id,
-      ...(parsed.data.dimension ? { dimension: parsed.data.dimension } : {}),
-      ...(parsed.data.source ? { source: parsed.data.source } : {}),
-    },
-    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
-  });
+  // Polled every 2.5s during research; evidence arrives in bursts seconds
+  // apart, so 2s of staleness is invisible while the burst refetches dedupe.
+  const rows = await microCached(
+    `evidence:${id}:${parsed.data.dimension ?? ""}:${parsed.data.source ?? ""}`,
+    2000,
+    () =>
+      prisma.evidence.findMany({
+        where: {
+          trialId: id,
+          ...(parsed.data.dimension ? { dimension: parsed.data.dimension } : {}),
+          ...(parsed.data.source ? { source: parsed.data.source } : {}),
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        take: 200,
+      }),
+  );
 
   return NextResponse.json({
     evidence: rows.map((row) => ({

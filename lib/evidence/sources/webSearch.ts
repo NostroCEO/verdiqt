@@ -1,18 +1,87 @@
 import { EvidenceSource } from "@prisma/client";
 
-import type { EvidenceAdapter } from "@/lib/evidence/types";
+import { cachedFetch, CACHE_TTL_HOURS } from "@/lib/evidence/cache";
+import { sanitizeSnippet } from "@/lib/sanitize";
+import {
+  MAX_ITEMS_PER_SOURCE,
+  type EvidenceAdapter,
+  type RawEvidence,
+} from "@/lib/evidence/types";
 
-// CUT by the zero-budget decision (docs/STATE.md 2026-08-27, founder D20):
-// the paid web-search tool is not used. The adapter stays as a truthful
-// typed no-op so the pipeline reports the reduced coverage instead of
-// silently narrowing it.
+type ExcerptItem = {
+  item_type?: string;
+  question_id?: number;
+  title?: string | null;
+  excerpt?: string | null;
+  creation_date?: number;
+};
+
+type ExcerptResponse = { items?: ExcerptItem[] };
+
+// Stack Exchange returns HTML-encoded titles/excerpts on this endpoint.
+function decodeEntities(value: string) {
+  return value
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+// The WEB_SEARCH slot, live at $0 (founder decision 2026-08-28, supersedes
+// the paid-search cut): Stack Overflow's public search API. People asking
+// how to solve a problem is direct pain evidence for developer-adjacent
+// SaaS ideas. Anonymous quota is 300 requests/day, generous under the 24h
+// cache; a refusal becomes a visible source_failed event.
 export const webSearchAdapter: EvidenceAdapter = {
   source: EvidenceSource.WEB_SEARCH,
-  async gather(_idea, { emit }) {
-    emit("source_disabled", {
-      source: EvidenceSource.WEB_SEARCH,
-      reason: "zero_budget_decision",
-    });
-    return [];
+  async gather(idea) {
+    const query = [idea.category, ...idea.keywords.slice(0, 3)]
+      .filter(Boolean)
+      .join(" ");
+
+    const data = await cachedFetch<ExcerptResponse>(
+      "WEB_SEARCH",
+      `stackoverflow:${query}`,
+      CACHE_TTL_HOURS.WEB_SEARCH,
+      async () => {
+        const response = await fetch(
+          `https://api.stackexchange.com/2.3/search/excerpts?order=desc&sort=relevance&q=${encodeURIComponent(query)}&site=stackoverflow&pagesize=${MAX_ITEMS_PER_SOURCE * 2}`,
+        );
+
+        if (!response.ok) {
+          throw new Error(`stackexchange_http_${response.status}`);
+        }
+
+        return (await response.json()) as ExcerptResponse;
+      },
+    );
+
+    const items: RawEvidence[] = [];
+
+    for (const item of data.items ?? []) {
+      if (item.item_type !== "question" || !item.question_id) continue;
+
+      const title = sanitizeSnippet(decodeEntities(item.title ?? ""), 160);
+      const snippet = sanitizeSnippet(
+        decodeEntities(item.excerpt || item.title || ""),
+      );
+      if (!title || !snippet) continue;
+
+      items.push({
+        source: EvidenceSource.WEB_SEARCH,
+        url: `https://stackoverflow.com/questions/${item.question_id}`,
+        title,
+        snippet,
+        publishedAt: item.creation_date
+          ? new Date(item.creation_date * 1000).toISOString()
+          : undefined,
+      });
+
+      if (items.length >= MAX_ITEMS_PER_SOURCE) break;
+    }
+
+    return items;
   },
 };

@@ -22,6 +22,7 @@ vi.mock("@/lib/db", () => ({
 }));
 
 import { GET } from "@/app/api/trials/[id]/status/route";
+import { microReset } from "@/lib/micro-cache";
 
 function routeContext(id: string) {
   return { params: Promise.resolve({ id }) };
@@ -33,6 +34,7 @@ describe("GET /api/trials/[id]/status", () => {
     mocks.resolveCurrentAnonymousPrincipal.mockReset();
     mocks.prisma.trial.findFirst.mockReset();
     mocks.prisma.trialEvent.findMany.mockReset();
+    microReset();
   });
 
   it("makes missing anonymous access indistinguishable from a missing trial", async () => {

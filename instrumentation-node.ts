@@ -36,4 +36,11 @@ export async function bootNode() {
   } catch (error) {
     console.error("colocated worker failed to start", error);
   }
+
+  try {
+    const { startRetentionLoop } = await import("@/lib/retention");
+    startRetentionLoop();
+  } catch (error) {
+    console.error("retention loop failed to start", error);
+  }
 }

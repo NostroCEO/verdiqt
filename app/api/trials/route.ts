@@ -123,8 +123,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error: "rate_limited",
-            retry_hint:
-              "The anonymous limit resets at midnight UTC. Judges can unlock at /judge.",
+            retry_hint: "The daily limit resets at midnight UTC.",
           },
           { status: 429 },
         );

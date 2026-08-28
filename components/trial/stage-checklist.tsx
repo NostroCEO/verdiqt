@@ -49,15 +49,24 @@ export function StageChecklist({ status }: { status: TrialStatusValue }) {
                 <span className="size-1.5 bg-border" />
               )}
             </span>
-            <span
-              className={cn(
-                "flex-1 text-xs",
-                state === "running" && "text-foreground",
-                state === "done" && "text-foreground/80",
-              )}
-            >
-              {STAGE_LABELS[stage]}
-            </span>
+            {state === "running" ? (
+              <motion.span
+                animate={{ opacity: [1, 0.55, 1] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+                className="flex-1 text-xs text-foreground motion-reduce:animate-none"
+              >
+                {STAGE_LABELS[stage]}
+              </motion.span>
+            ) : (
+              <span
+                className={cn(
+                  "flex-1 text-xs",
+                  state === "done" && "text-foreground/80",
+                )}
+              >
+                {STAGE_LABELS[stage]}
+              </span>
+            )}
             <span className="font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
               {state === "running" ? "In progress" : state === "done" ? "Done" : state === "failed" ? "Failed" : "Waiting"}
             </span>

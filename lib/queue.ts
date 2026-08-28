@@ -38,6 +38,9 @@ export function getBoss() {
       connectionString: bossConnectionString(),
       schema: "pgboss",
       application_name: "verdiqt-worker",
+      // Free-tier Postgres shares ~95 connections with the Prisma pools;
+      // one serial worker never needs pg-boss's default pool of 10.
+      max: 4,
     });
   }
 

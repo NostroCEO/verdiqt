@@ -13,7 +13,7 @@ import { prisma } from "@/lib/db";
 import { emitEvent } from "@/lib/events";
 import { gatherAll } from "@/lib/evidence/gather";
 import type { EvidenceEmitter, NormalizedIdea } from "@/lib/evidence/types";
-import { retrieveKnowledge } from "@/lib/brain/retrieve";
+import { retrieveGrounding } from "@/lib/brain/retrieve";
 import { TRIAL_CAPS } from "@/lib/llm";
 import { classifyEvidence } from "@/lib/verdict/classify";
 import { composeVerdict, type DimensionScores } from "@/lib/verdict/compose";
@@ -204,11 +204,26 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
         strength: row.strength,
       }));
 
-    const knowledge = await retrieveKnowledge(
-      `${idea.category} ${idea.keywords.join(" ")}`,
+    const knowledge = await retrieveGrounding(
+      [idea.category, ...idea.keywords],
       [dimension],
       4,
-    ).catch(() => []);
+    ).catch((error: unknown) => {
+      console.error("knowledge retrieval failed", error);
+      return [];
+    });
+
+    // The knowledge stage is visible like every other source (founder rule:
+    // the user sees where information comes from); zero-yield is a signal,
+    // never a silent shrug.
+    void emitEvent({
+      trialId: ctx.trialId,
+      pipelineRunId: ctx.runId,
+      actor: Actor.SYSTEM,
+      kind: "knowledge_retrieved",
+      dedupeKey: `${ctx.runId}:knowledge:${dimension}`,
+      payload: { revision: ctx.revision, dimension, count: knowledge.length },
+    }).catch(() => {});
 
     const result = await scoreDimension(idea, dimension, dimensionEvidence, knowledge);
     scores[dimension] = result.score;

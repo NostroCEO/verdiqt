@@ -5,6 +5,7 @@ import type { TrialStatus } from "@prisma/client";
 import type { AnonymousCookieStore } from "@/lib/access";
 import { resolveCurrentAnonymousPrincipal } from "@/lib/access";
 import { prisma } from "@/lib/db";
+import { microCached } from "@/lib/micro-cache";
 
 const stageOrder: TrialStatus[] = [
   "NORMALIZING",
@@ -67,10 +68,27 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  // Status polls every 5s per client and SSE events trigger extra refetches
+  // in bursts; a 2s cache collapses the bursts. Keyed by owner so a cached
+  // body can never cross visitors.
+  const body = await microCached(
+    `status:${principal.anonymousSessionId}:${id}`,
+    2000,
+    () => buildStatusBody(id, principal.anonymousSessionId),
+  );
+
+  if (!body) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  return NextResponse.json(body);
+}
+
+async function buildStatusBody(id: string, anonymousSessionId: string) {
   const trial = await prisma.trial.findFirst({
     where: {
       id,
-      anonymousSessionId: principal.anonymousSessionId,
+      anonymousSessionId,
     },
     select: {
       id: true,
@@ -109,7 +127,7 @@ export async function GET(
   });
 
   if (!trial) {
-    return NextResponse.json({ error: "not_found" }, { status: 404 });
+    return null;
   }
 
   // A FAILED trial names its reason (our own typed error strings, safe to
@@ -136,7 +154,7 @@ export async function GET(
     },
   });
 
-  return NextResponse.json({
+  return {
     run_id: trial.id,
     status: trial.status,
     pipeline_revision: trial.pipelineRevision,
@@ -167,5 +185,5 @@ export async function GET(
     created_at: trial.createdAt,
     completed_at: trial.completedAt,
     error_code: errorCode,
-  });
+  };
 }

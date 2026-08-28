@@ -1,22 +1,32 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Flame, FolderGit2, Globe, MessagesSquare, Rocket, type LucideIcon } from "lucide-react";
+import { Globe } from "lucide-react";
 
+import {
+  GitHubMark,
+  HackerNewsMark,
+  ProductHuntMark,
+  RedditMark,
+  StackOverflowMark,
+} from "@/components/icons/brand-icons";
 import { StageChecklist } from "@/components/trial/stage-checklist";
 import type { LiveEvidenceItem } from "@/lib/hooks/use-trial-live";
 import type { TrialStatusValue } from "@/lib/trial-progress";
 import { cn } from "@/lib/utils";
 
-// Platform glyphs (founder UX rule 2026-08-28): recognizable source icons in
-// the research feed. Lucide glyphs, not third-party brand assets, keeping
-// the four-official-marks rule intact.
-const SOURCES: Record<string, { label: string; icon: LucideIcon }> = {
-  HACKERNEWS: { label: "Hacker News", icon: Flame },
-  GITHUB: { label: "GitHub", icon: FolderGit2 },
-  PRODUCT_HUNT: { label: "Product Hunt", icon: Rocket },
-  WEB_SEARCH: { label: "Web search", icon: Globe },
-  REDDIT: { label: "Reddit", icon: MessagesSquare },
+// Official platform marks (founder rule 2026-08-28): the research feed shows
+// exactly where each piece of evidence comes from. WEB_SEARCH is served by
+// Stack Overflow's public API, so it wears that mark truthfully.
+const SOURCES: Record<
+  string,
+  { label: string; icon: (props: { className?: string }) => React.ReactElement }
+> = {
+  HACKERNEWS: { label: "Hacker News", icon: HackerNewsMark },
+  GITHUB: { label: "GitHub", icon: GitHubMark },
+  PRODUCT_HUNT: { label: "Product Hunt", icon: ProductHuntMark },
+  WEB_SEARCH: { label: "Stack Overflow", icon: StackOverflowMark },
+  REDDIT: { label: "Reddit", icon: RedditMark },
 };
 
 function hostOf(url: string) {
@@ -47,13 +57,21 @@ export function ResearchPane({
       </div>
 
       <div className="min-w-0">
-        <p className="mb-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
+        <p className="mb-2 flex items-center gap-1.5 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
+          {status === "GATHERING" || status === "CLASSIFYING" ? (
+            <motion.span
+              aria-hidden="true"
+              className="size-1.5 rounded-full bg-primary"
+              animate={{ opacity: [1, 0.25, 1] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+            />
+          ) : null}
           Evidence feed ({evidence.length} items from public sources)
         </p>
         {evidence.length === 0 ? (
           <div className="border border-border bg-background p-4 text-xs text-muted-foreground">
             {status === "GATHERING" || status === "NORMALIZING"
-              ? "Searching Hacker News, GitHub, and Product Hunt for this case..."
+              ? "Searching Hacker News, GitHub, Product Hunt, Reddit, and Stack Overflow for this case..."
               : "No evidence gathered yet."}
           </div>
         ) : (
@@ -70,8 +88,12 @@ export function ResearchPane({
                   <div className="flex items-center gap-2">
                     <span className="inline-flex shrink-0 items-center gap-1 border border-border px-1.5 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-primary">
                       {(() => {
-                        const Icon = SOURCES[item.source]?.icon ?? Globe;
-                        return <Icon aria-hidden="true" className="size-2.5" />;
+                        const Icon = SOURCES[item.source]?.icon;
+                        return Icon ? (
+                          <Icon className="size-2.5 shrink-0" />
+                        ) : (
+                          <Globe aria-hidden="true" className="size-2.5" />
+                        );
                       })()}
                       {SOURCES[item.source]?.label ?? item.source}
                     </span>

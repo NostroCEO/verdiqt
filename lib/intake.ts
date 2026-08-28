@@ -64,7 +64,7 @@ export async function startTrialRequest(
     if (response.status === 429) {
       return {
         outcome: "limited",
-        message: "DAILY TRIAL LIMIT REACHED. JUDGES CAN UNLOCK AT /JUDGE.",
+        message: "TODAY'S DOCKET IS FULL. THE COURT REOPENS AT MIDNIGHT UTC.",
       };
     }
 

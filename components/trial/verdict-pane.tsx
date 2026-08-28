@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Scale } from "lucide-react";
 import { motion } from "motion/react";
 
-import { LiveVerdictPanel } from "@/components/landing/live-verdict-panel";
+import { LiveVerdictPanel, scoreToneClass } from "@/components/landing/live-verdict-panel";
 import type { LiveTrialState } from "@/lib/hooks/use-trial-live";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +87,9 @@ export function VerdictPane({
                   <span className="flex-1 text-xs font-medium">
                     {dimension.dimension.replaceAll("_", " ")}
                   </span>
-                  <span className="font-mono text-xs text-foreground">{dimension.score}</span>
+                  <span className={cn("font-mono text-xs", scoreToneClass(dimension.score))}>
+                    {dimension.score}
+                  </span>
                   <ChevronDown
                     className={cn(
                       "size-3.5 text-muted-foreground transition-transform motion-reduce:transition-none",
