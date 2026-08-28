@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import type { AnonymousCookieStore } from "@/lib/access";
+import { resolveCurrentAnonymousPrincipal } from "@/lib/access";
+import { prisma } from "@/lib/db";
 import { isValidJudgeCookie, JUDGE_COOKIE } from "@/lib/judge";
 import { checkRateLimit, hashIp } from "@/lib/ratelimit";
 import { startTrial } from "@/lib/trials/start";
@@ -35,6 +37,49 @@ function validationIssues(error: z.ZodError) {
     path: issue.path.join(".") || "_root",
     message: issue.message,
   }));
+}
+
+// The session's case archive (eng review R3): strictly scoped to the
+// caller's anonymous session. No principal means an empty list, never an
+// error, because a list has no enumeration surface to protect.
+export async function GET() {
+  const cookieStore = (await cookies()) as unknown as AnonymousCookieStore;
+  const principal = await resolveCurrentAnonymousPrincipal(cookieStore);
+
+  if (!principal) {
+    return NextResponse.json({ trials: [] });
+  }
+
+  const trials = await prisma.trial.findMany({
+    where: { anonymousSessionId: principal.anonymousSessionId },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      ideaText: true,
+      repoUrl: true,
+      status: true,
+      verdict: true,
+      compositeScore: true,
+      createdAt: true,
+      normalizedIdea: { select: { oneLiner: true } },
+    },
+  });
+
+  return NextResponse.json({
+    trials: trials.map((trial) => ({
+      run_id: trial.id,
+      case_label:
+        trial.normalizedIdea?.oneLiner ??
+        trial.ideaText?.slice(0, 64) ??
+        trial.repoUrl ??
+        "Untitled case",
+      status: trial.status,
+      verdict: trial.verdict,
+      composite_score: trial.compositeScore,
+      created_at: trial.createdAt,
+    })),
+  });
 }
 
 export async function POST(request: Request) {

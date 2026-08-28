@@ -1,20 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export type LiveDimensionScore = { dimension: string; score: number };
+import {
+  hasWorkerProgress,
+  isResearchPhase,
+  isTerminalStatus,
+  mergeEvidenceById,
+  type TrialStatusValue,
+} from "@/lib/trial-progress";
+
+export type LiveDimensionScore = {
+  dimension: string;
+  score: number;
+  rationale: string;
+  evidenceIds: string[];
+};
+
+export type LiveEvidenceItem = {
+  id: string;
+  source: string;
+  url: string;
+  title: string;
+  snippet: string;
+  dimension: string;
+  strength: number;
+  humanState: string;
+};
 
 export type LiveTrialState = {
-  status:
-    | "QUEUED"
-    | "NORMALIZING"
-    | "GATHERING"
-    | "CLASSIFYING"
-    | "SCORING"
-    | "COMPLETE"
-    | "FAILED"
-    | null;
+  status: TrialStatusValue;
   evidenceCount: number;
+  evidence: LiveEvidenceItem[];
   compositeScore: number | null;
   verdict: string | null;
   dimensions: LiveDimensionScore[] | null;
@@ -29,6 +46,7 @@ export type LiveTrialState = {
 const initialState: LiveTrialState = {
   status: null,
   evidenceCount: 0,
+  evidence: [],
   compositeScore: null,
   verdict: null,
   dimensions: null,
@@ -40,43 +58,128 @@ const initialState: LiveTrialState = {
   error: null,
 };
 
-// Live trial state for the dashboard: one authoritative status fetch, then
-// the SSE stream. Every event triggers a status refetch (persisted state is
-// the single source of truth; events are only the wake-up signal), and the
-// browser's automatic Last-Event-ID resume covers transient drops. The
-// server closes the stream after the terminal event; we mirror that close.
+const STATUS_POLL_MS = 5000;
+const EVIDENCE_POLL_MS = 2500;
+
+// Live trial state, SSE-independent by design (eng review R0.3): persisted
+// status polls on its own clock while the trial runs, SSE events only
+// accelerate refetches, and evidence polls during the research phases,
+// pausing while the tab is hidden. Nothing here can make a working pipeline
+// look dead just because a stream buffered.
 export function useTrialLive(runId: string | null): LiveTrialState {
   const [state, setState] = useState<LiveTrialState>(initialState);
+  const sawStageEventRef = useRef(false);
+  const statusRef = useRef<TrialStatusValue>(null);
 
   useEffect(() => {
     if (!runId) {
       setState(initialState);
+      sawStageEventRef.current = false;
       return;
     }
 
     let cancelled = false;
+    let terminal = false;
+    let verdictFetched = false;
     let source: EventSource | null = null;
+    const encoded = encodeURIComponent(runId);
 
-    async function refetchStatus() {
+    async function fetchVerdictDetails() {
+      if (verdictFetched) return;
+      verdictFetched = true;
       try {
-        const response = await fetch(`/api/trials/${encodeURIComponent(runId!)}/status`, {
+        const response = await fetch(`/api/trials/${encoded}/verdict`, {
           cache: "no-store",
           credentials: "include",
         });
-        if (cancelled) return false;
+        if (cancelled || !response.ok) return;
+        const body = (await response.json()) as {
+          dimensions: Array<{
+            dimension: string;
+            score: number;
+            rationale: string;
+            evidence_ids: string[];
+          }>;
+          pivot_direction: string | null;
+          next_step: { action?: string } | null;
+        };
+        setState((current) => ({
+          ...current,
+          dimensions: body.dimensions.map((entry) => ({
+            dimension: entry.dimension,
+            score: entry.score,
+            rationale: entry.rationale,
+            evidenceIds: entry.evidence_ids,
+          })),
+          pivotDirection: body.pivot_direction,
+          nextStepAction: body.next_step?.action ?? null,
+        }));
+      } catch {
+        verdictFetched = false;
+      }
+    }
+
+    async function fetchEvidence() {
+      try {
+        const response = await fetch(`/api/trials/${encoded}/evidence`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (cancelled || !response.ok) return;
+        const body = (await response.json()) as {
+          evidence: Array<{
+            id: string;
+            source: string;
+            url: string;
+            title: string;
+            snippet: string;
+            dimension: string;
+            strength: number;
+            human_state: string;
+          }>;
+        };
+        setState((current) => ({
+          ...current,
+          evidence: mergeEvidenceById(
+            current.evidence,
+            body.evidence.map((item) => ({
+              id: item.id,
+              source: item.source,
+              url: item.url,
+              title: item.title,
+              snippet: item.snippet,
+              dimension: item.dimension,
+              strength: item.strength,
+              humanState: item.human_state,
+            })),
+          ),
+        }));
+      } catch {
+        // Next poll retries.
+      }
+    }
+
+    async function refetchStatus() {
+      try {
+        const response = await fetch(`/api/trials/${encoded}/status`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (cancelled) return;
 
         if (!response.ok) {
           setState((current) => ({ ...current, error: `status_${response.status}` }));
-          return false;
+          return;
         }
 
         const body = (await response.json()) as {
-          status: LiveTrialState["status"];
+          status: TrialStatusValue;
           evidence_count: number;
           composite_score: number | null;
           verdict: string | null;
         };
 
+        statusRef.current = body.status;
         setState((current) => ({
           ...current,
           status: body.status,
@@ -84,82 +187,78 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           compositeScore: body.composite_score,
           verdict: body.verdict,
           connected: true,
+          workerSeen: hasWorkerProgress({
+            status: body.status,
+            evidenceCount: body.evidence_count,
+            sawStageEvent: sawStageEventRef.current,
+          }),
           error: null,
         }));
 
-        // The full verdict payload (dimension scores for the radar, pivot
-        // direction, next step) exists only once the trial completes.
-        if (body.status === "COMPLETE") {
-          void fetch(`/api/trials/${encodeURIComponent(runId!)}/verdict`, {
-            cache: "no-store",
-            credentials: "include",
-          })
-            .then(async (verdictResponse) => {
-              if (cancelled || !verdictResponse.ok) return;
-              const verdictBody = (await verdictResponse.json()) as {
-                dimensions: Array<{ dimension: string; score: number }>;
-                pivot_direction: string | null;
-                next_step: { action?: string } | null;
-              };
-              setState((current) => ({
-                ...current,
-                dimensions: verdictBody.dimensions,
-                pivotDirection: verdictBody.pivot_direction,
-                nextStepAction: verdictBody.next_step?.action ?? null,
-              }));
-            })
-            .catch(() => {
-              // The composite and verdict already render from status.
-            });
+        if (isResearchPhase(body.status) || body.status === "COMPLETE") {
+          void fetchEvidence();
         }
-
-        return body.status === "COMPLETE" || body.status === "FAILED";
+        if (body.status === "COMPLETE") {
+          void fetchVerdictDetails();
+        }
+        if (isTerminalStatus(body.status)) {
+          terminal = true;
+          source?.close();
+        }
       } catch {
         if (!cancelled) {
           setState((current) => ({ ...current, error: "status_unreachable" }));
         }
-        return false;
       }
     }
 
-    void refetchStatus().then((terminal) => {
-      if (cancelled || terminal) return;
+    const statusTimer = setInterval(() => {
+      if (!terminal && document.visibilityState !== "hidden") {
+        void refetchStatus();
+      }
+    }, STATUS_POLL_MS);
 
-      source = new EventSource(`/api/trials/${encodeURIComponent(runId!)}/stream`);
+    const evidenceTimer = setInterval(() => {
+      if (
+        !terminal &&
+        document.visibilityState !== "hidden" &&
+        isResearchPhase(statusRef.current)
+      ) {
+        void fetchEvidence();
+      }
+    }, EVIDENCE_POLL_MS);
 
-      source.onmessage = (message) => {
-        try {
-          const event = JSON.parse(message.data) as { kind?: string };
-          const kind = event.kind ?? null;
+    void refetchStatus();
 
-          setState((current) => ({
-            ...current,
-            lastEventKind: kind,
-            workerSeen: current.workerSeen || kind === "stage_started",
-          }));
-
-          void refetchStatus().then((terminal2) => {
-            if (terminal2) source?.close();
-          });
-        } catch {
-          // Ignore unparseable frames; the next status refetch corrects us.
+    source = new EventSource(`/api/trials/${encoded}/stream`);
+    source.onmessage = (message) => {
+      try {
+        const event = JSON.parse(message.data) as { kind?: string };
+        if (event.kind === "stage_started") {
+          sawStageEventRef.current = true;
         }
-      };
-
-      source.onerror = () => {
-        // EventSource reconnects on its own with Last-Event-ID; only note
-        // the hiccup so the UI can stay honest if it persists.
-        setState((current) =>
-          current.status === "COMPLETE" || current.status === "FAILED"
-            ? current
-            : { ...current, error: "stream_reconnecting" },
-        );
-      };
-    });
+        setState((current) => ({
+          ...current,
+          lastEventKind: event.kind ?? null,
+          workerSeen: current.workerSeen || event.kind === "stage_started",
+        }));
+        void refetchStatus();
+      } catch {
+        // The status poll is the source of truth anyway.
+      }
+    };
+    source.onerror = () => {
+      // EventSource reconnects itself with Last-Event-ID; the status poll
+      // keeps the UI honest meanwhile, so no error state is surfaced here.
+    };
 
     return () => {
       cancelled = true;
+      clearInterval(statusTimer);
+      clearInterval(evidenceTimer);
       source?.close();
+      sawStageEventRef.current = false;
+      statusRef.current = null;
     };
   }, [runId]);
 

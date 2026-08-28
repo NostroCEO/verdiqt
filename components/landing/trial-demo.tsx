@@ -18,7 +18,14 @@ import {
 import { cn } from "@/lib/utils";
 import { useSyncExternalStore } from "react";
 import { useTrialLive } from "@/lib/hooks/use-trial-live";
-import { LiveVerdictPanel } from "@/components/landing/live-verdict-panel";
+import { AnimatePresence, motion } from "motion/react";
+import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
+
+import { ArchiveRail } from "@/components/trial/archive-rail";
+import { ResearchPane } from "@/components/trial/research-pane";
+import { VerdictPane } from "@/components/trial/verdict-pane";
+import { phaseIndexFor, phaseStates } from "@/lib/trial-progress";
 import {
   getAgentChannelSnapshot,
   getAgentChannelServerSnapshot,
@@ -136,15 +143,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 
 type TrialStartedDetail = PreviewStartDetail & { runId?: string };
 
-// Maps persisted trial status to the active phase indicator (0-based).
-function phaseIndexFor(status: string | null): number {
-  if (status === "GATHERING" || status === "CLASSIFYING" || status === "SCORING") {
-    return 1;
-  }
-  if (status === "COMPLETE") return 2;
-  return 0;
-}
-
 export function TrialDashboard({
   initialIntake,
   initialRunId,
@@ -197,9 +195,21 @@ export function TrialDashboard({
     };
   }, []);
 
+  const router = useRouter();
+  // null = the view follows the pipeline; a number = the user chose a tab.
+  const [chosenView, setChosenView] = useState<number | null>(null);
+
   const isLive = runId !== null;
   const activePhase = isLive ? phaseIndexFor(live.status) : 0;
+  const states = phaseStates(live.status, isLive);
+  const displayedView = isLive ? (chosenView ?? activePhase) : 0;
   const failed = live.status === "FAILED";
+
+  function switchRun(nextRunId: string) {
+    setRunId(nextRunId);
+    setChosenView(null);
+    router.replace("/trial?run=" + encodeURIComponent(nextRunId));
+  }
 
   function returnToIntake() {
     const input = document.getElementById("trial-input");
@@ -263,25 +273,42 @@ export function TrialDashboard({
 
           <nav aria-label="Trial phases" className="grid h-11 grid-cols-3 gap-px bg-border">
             {phases.map((phase, index) => {
-              const active = index === activePhase;
+              const phaseState = states[index as 0 | 1 | 2];
+              const viewed = index === displayedView;
+              // Locks exist only BEFORE a run starts; once live, every
+              // phase is viewable (founder rule).
+              const clickable = isLive || index === 0;
 
               return (
                 <button
                   key={phase.id}
                   type="button"
-                  aria-current={active ? "step" : undefined}
-                  disabled={!active}
+                  aria-current={viewed ? "step" : undefined}
+                  disabled={!clickable}
+                  onClick={() => (isLive ? setChosenView(index) : undefined)}
                   className={cn(
-                    "relative min-w-0 border-y border-border px-2 font-mono text-[0.58rem] uppercase tracking-[0.04em] sm:text-xs sm:tracking-[0.08em]",
-                    active
+                    "relative min-w-0 border-y border-border px-2 font-mono text-[0.58rem] uppercase tracking-[0.04em] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:text-xs sm:tracking-[0.08em]",
+                    viewed
                       ? "bg-surface-2 text-foreground"
-                      : "cursor-not-allowed bg-background text-muted-foreground/50",
+                      : clickable
+                        ? "bg-background text-muted-foreground hover:bg-surface hover:text-foreground"
+                        : "cursor-not-allowed bg-background text-muted-foreground/50",
+                    phaseState === "failed" && "text-kill",
                   )}
                 >
                   <span className="mr-1.5 text-primary sm:mr-2">{phase.number}</span>
                   {phase.label}
-                  {!active ? <LockKeyhole className="ml-1.5 inline size-2.5" /> : null}
-                  {active ? <span className="absolute inset-x-0 bottom-0 h-px bg-primary" /> : null}
+                  {phaseState === "done" ? (
+                    <Check className="ml-1.5 inline size-3 text-primary" />
+                  ) : !clickable ? (
+                    <LockKeyhole className="ml-1.5 inline size-2.5" />
+                  ) : null}
+                  {viewed ? (
+                    <motion.span
+                      layoutId="trial-phase-underline"
+                      className="absolute inset-x-0 bottom-0 h-px bg-primary"
+                    />
+                  ) : null}
                 </button>
               );
             })}
@@ -315,7 +342,7 @@ export function TrialDashboard({
                 <div>
                   <p className="font-mono text-[0.52rem] uppercase tracking-[0.1em] text-primary">
                     {isLive
-                      ? `Phase 0${activePhase + 1} / ${phases[activePhase].label}`
+                      ? `Phase 0${displayedView + 1} / ${phases[displayedView].label}`
                       : "Phase 01 / Trial intake"}
                   </p>
                   <h2 className="mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">
@@ -387,52 +414,50 @@ export function TrialDashboard({
                 <MetricCard label="Verdict" value={live.verdict ?? "--"} />
               </div>
 
-              <div className="mt-3 grid gap-px bg-border sm:grid-cols-2">
-                <div className="min-h-28 bg-background p-3">
-                  <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
-                    Evidence feed
-                  </p>
-                  {activePhase >= 1 ? (
-                    <p className="mt-4 text-xs text-foreground">
-                      {live.evidenceCount} items gathered from public sources.
+              {isLive ? (
+                <AnimatePresence initial={false} mode="wait">
+                  <motion.div
+                    key={displayedView}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ type: "spring", visualDuration: 0.25, bounce: 0.1 }}
+                    className="mt-3"
+                  >
+                    {displayedView === 0 ? (
+                      <div className="border border-border bg-background p-4 text-xs leading-5 text-foreground/80">
+                        The case is filed and the run is live. Phase 2 shows the
+                        research as it happens; Phase 3 holds the verdict.
+                      </div>
+                    ) : displayedView === 1 ? (
+                      <ResearchPane status={live.status} evidence={live.evidence} />
+                    ) : (
+                      <VerdictPane live={live} onFileAnother={returnToIntake} />
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              ) : (
+                <div className="mt-3 grid gap-px bg-border sm:grid-cols-2">
+                  <div className="min-h-28 bg-background p-3">
+                    <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
+                      Evidence feed
                     </p>
-                  ) : (
                     <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                       <LockKeyhole className="size-3.5" />
-                      Locked until Phase 2 begins.
+                      Locked until the case is filed.
                     </div>
-                  )}
-                </div>
-                <div className="min-h-28 bg-background p-3">
-                  <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
-                    Gauge and radar
-                  </p>
-                  {live.status === "COMPLETE" &&
-                  live.verdict &&
-                  live.compositeScore !== null ? (
-                    live.dimensions && live.dimensions.length === 6 ? (
-                      <div className="mt-3">
-                        <LiveVerdictPanel
-                          compositeScore={live.compositeScore}
-                          verdict={live.verdict}
-                          dimensions={live.dimensions}
-                          pivotDirection={live.pivotDirection}
-                          nextStepAction={live.nextStepAction}
-                        />
-                      </div>
-                    ) : (
-                      <p className="mt-4 text-xs text-foreground">
-                        {live.verdict} at {live.compositeScore}. Loading dimension scores.
-                      </p>
-                    )
-                  ) : (
+                  </div>
+                  <div className="min-h-28 bg-background p-3">
+                    <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
+                      Gauge and radar
+                    </p>
                     <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                       <LockKeyhole className="size-3.5" />
                       Locked until a real verdict exists.
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="mt-3 flex items-center gap-2 border border-border bg-background px-3 py-2 font-mono text-[0.52rem] text-muted-foreground">
                 <Terminal className="size-3 text-primary" />
@@ -482,6 +507,7 @@ export function TrialDashboard({
                   active={live.workerSeen}
                 />
               </ul>
+              <ArchiveRail activeRunId={runId} onSelect={switchRun} />
               <AgentChannelPanel />
             </aside>
           </div>
