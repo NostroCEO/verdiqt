@@ -18,18 +18,15 @@ type RepoSearchItem = {
 
 type RepoSearchResponse = { items: RepoSearchItem[] };
 
-// Documented repository search API; the token raises rate limits and is never
-// sent anywhere but api.github.com. Public repositories only.
 export const githubAdapter: EvidenceAdapter = {
   source: EvidenceSource.GITHUB,
   async gather(idea) {
-    const query = [idea.category, ...idea.keywords.slice(0, 2)]
-      .filter(Boolean)
-      .join(" ");
+    const query = idea.oneLiner;
+    const cacheKey = `repo-search:${query}`;
 
     const data = await cachedFetch<RepoSearchResponse>(
       "GITHUB",
-      `repo-search:${query}`,
+      cacheKey,
       CACHE_TTL_HOURS.GITHUB,
       async () => {
         const token = process.env.GITHUB_TOKEN;

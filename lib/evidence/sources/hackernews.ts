@@ -33,28 +33,44 @@ function hitUrl(hit: AlgoliaHit) {
   );
 }
 
-// Public Algolia HN search API: no key, free, cached 24h per query.
+async function searchHN(query: string, perPage: number): Promise<AlgoliaResponse> {
+  const response = await fetch(
+    `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&tags=(story,comment)&hitsPerPage=${perPage}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`hackernews_http_${response.status}`);
+  }
+
+  return (await response.json()) as AlgoliaResponse;
+}
+
 export const hackernewsAdapter: EvidenceAdapter = {
   source: EvidenceSource.HACKERNEWS,
   async gather(idea) {
-    const query = [idea.category, ...idea.keywords.slice(0, 3)]
-      .filter(Boolean)
-      .join(" ");
+    const primaryQuery = idea.oneLiner;
+    const secondaryQuery = [idea.problem, idea.audience].filter(Boolean).join(" ");
+    const cacheKey = `search:${primaryQuery}|${secondaryQuery}`;
 
     const data = await cachedFetch<AlgoliaResponse>(
       "HACKERNEWS",
-      `search:${query}`,
+      cacheKey,
       CACHE_TTL_HOURS.HACKERNEWS,
       async () => {
-        const response = await fetch(
-          `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&tags=(story,comment)&hitsPerPage=${MAX_ITEMS_PER_SOURCE * 2}`,
-        );
+        const [primary, secondary] = await Promise.all([
+          searchHN(primaryQuery, MAX_ITEMS_PER_SOURCE),
+          searchHN(secondaryQuery, 8).catch(() => ({ hits: [] as AlgoliaHit[] })),
+        ]);
 
-        if (!response.ok) {
-          throw new Error(`hackernews_http_${response.status}`);
+        const seenIds = new Set<string>();
+        const merged: AlgoliaHit[] = [];
+        for (const hit of [...primary.hits, ...secondary.hits]) {
+          if (seenIds.has(hit.objectID)) continue;
+          seenIds.add(hit.objectID);
+          merged.push(hit);
         }
 
-        return (await response.json()) as AlgoliaResponse;
+        return { hits: merged };
       },
     );
 

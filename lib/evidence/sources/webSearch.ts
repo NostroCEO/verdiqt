@@ -18,7 +18,6 @@ type ExcerptItem = {
 
 type ExcerptResponse = { items?: ExcerptItem[] };
 
-// Stack Exchange returns HTML-encoded titles/excerpts on this endpoint.
 function decodeEntities(value: string) {
   return value
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
@@ -29,21 +28,17 @@ function decodeEntities(value: string) {
     .replace(/&amp;/g, "&");
 }
 
-// The WEB_SEARCH slot, live at $0 (founder decision 2026-08-28, supersedes
-// the paid-search cut): Stack Overflow's public search API. People asking
-// how to solve a problem is direct pain evidence for developer-adjacent
-// SaaS ideas. Anonymous quota is 300 requests/day, generous under the 24h
-// cache; a refusal becomes a visible source_failed event.
 export const webSearchAdapter: EvidenceAdapter = {
   source: EvidenceSource.WEB_SEARCH,
   async gather(idea) {
-    const query = [idea.category, ...idea.keywords.slice(0, 3)]
+    const query = [idea.problem, ...idea.keywords.slice(0, 2)]
       .filter(Boolean)
       .join(" ");
+    const cacheKey = `stackoverflow:${query}`;
 
     const data = await cachedFetch<ExcerptResponse>(
       "WEB_SEARCH",
-      `stackoverflow:${query}`,
+      cacheKey,
       CACHE_TTL_HOURS.WEB_SEARCH,
       async () => {
         const response = await fetch(

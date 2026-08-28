@@ -5,6 +5,7 @@ import { sanitizeSnippet } from "@/lib/sanitize";
 import {
   MAX_ITEMS_PER_SOURCE,
   type EvidenceAdapter,
+  type NormalizedIdea,
   type RawEvidence,
 } from "@/lib/evidence/types";
 
@@ -26,25 +27,26 @@ const TOPIC_QUERY = `query($first: Int!, $topic: String!) {
   }
 }`;
 
-const TRENDING_QUERY = `query($first: Int!) {
-  posts(first: $first, order: VOTES) {
-    edges { node { name tagline url votesCount createdAt } }
-  }
-}`;
-
-// Product Hunt's v2 API filters posts by topic slug, not free text; the
-// idea's category slugified usually lands on a real topic ("FinTech" ->
-// "fintech"). An unknown topic returns empty edges, so trending is the
-// fallback rather than the default — evidence should be ABOUT the case.
-function topicSlug(category: string) {
-  return category
+function topicSlug(text: string) {
+  return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
-// Token-gated: without PRODUCT_HUNT_TOKEN the adapter returns [] and the
-// pipeline emits source_disabled once per trial.
+function candidateSlugs(idea: NormalizedIdea): string[] {
+  const seen = new Set<string>();
+  const slugs: string[] = [];
+  for (const raw of [idea.category, ...idea.keywords]) {
+    const slug = topicSlug(raw);
+    if (slug && !seen.has(slug)) {
+      seen.add(slug);
+      slugs.push(slug);
+    }
+  }
+  return slugs.slice(0, 4);
+}
+
 export const productHuntAdapter: EvidenceAdapter = {
   source: EvidenceSource.PRODUCT_HUNT,
   async gather(idea, { emit }) {
@@ -58,16 +60,17 @@ export const productHuntAdapter: EvidenceAdapter = {
       return [];
     }
 
-    const slug = topicSlug(idea.category);
+    const slugs = candidateSlugs(idea);
+    const cacheKey = `topics:${slugs.join(",")}`;
 
-    async function phQuery(query: string, variables: Record<string, unknown>) {
+    async function phQuery(variables: Record<string, unknown>) {
       const response = await fetch("https://api.producthunt.com/v2/api/graphql", {
         method: "POST",
         headers: {
           "content-type": "application/json",
           authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ query, variables }),
+        body: JSON.stringify({ query: TOPIC_QUERY, variables }),
       });
 
       if (!response.ok) {
@@ -77,28 +80,35 @@ export const productHuntAdapter: EvidenceAdapter = {
       return (await response.json()) as PhResponse;
     }
 
-    const data = await cachedFetch<PhResponse>(
+    const merged = await cachedFetch<PhPost[]>(
       "PRODUCT_HUNT",
-      `topic:${slug}`,
+      cacheKey,
       CACHE_TTL_HOURS.PRODUCT_HUNT,
       async () => {
-        if (slug) {
-          const byTopic = await phQuery(TOPIC_QUERY, {
-            first: MAX_ITEMS_PER_SOURCE,
-            topic: slug,
-          });
-          if ((byTopic.data?.posts?.edges ?? []).length > 0) {
-            return byTopic;
+        const seenUrls = new Set<string>();
+        const posts: PhPost[] = [];
+
+        for (const slug of slugs) {
+          if (posts.length >= MAX_ITEMS_PER_SOURCE) break;
+          try {
+            const result = await phQuery({ first: 8, topic: slug });
+            for (const edge of result.data?.posts?.edges ?? []) {
+              if (seenUrls.has(edge.node.url)) continue;
+              seenUrls.add(edge.node.url);
+              posts.push(edge.node);
+            }
+          } catch {
+            // A single slug failing is fine; others may succeed.
           }
         }
-        return phQuery(TRENDING_QUERY, { first: MAX_ITEMS_PER_SOURCE });
+
+        return posts;
       },
     );
 
     const items: RawEvidence[] = [];
 
-    for (const edge of data.data?.posts?.edges ?? []) {
-      const node = edge.node;
+    for (const node of merged) {
       const snippet = sanitizeSnippet(
         `${node.tagline ?? ""} (${node.votesCount ?? 0} votes)`,
       );
