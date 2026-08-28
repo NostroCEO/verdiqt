@@ -41,6 +41,7 @@ export type LiveTrialState = {
   connected: boolean;
   workerSeen: boolean;
   error: string | null;
+  errorCode: string | null;
 };
 
 const initialState: LiveTrialState = {
@@ -56,6 +57,7 @@ const initialState: LiveTrialState = {
   connected: false,
   workerSeen: false,
   error: null,
+  errorCode: null,
 };
 
 const STATUS_POLL_MS = 5000;
@@ -177,6 +179,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           evidence_count: number;
           composite_score: number | null;
           verdict: string | null;
+          error_code?: string | null;
         };
 
         statusRef.current = body.status;
@@ -186,6 +189,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           evidenceCount: body.evidence_count,
           compositeScore: body.composite_score,
           verdict: body.verdict,
+          errorCode: body.error_code ?? null,
           connected: true,
           workerSeen: hasWorkerProgress({
             status: body.status,

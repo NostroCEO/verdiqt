@@ -8,6 +8,21 @@ import { LiveVerdictPanel } from "@/components/landing/live-verdict-panel";
 import type { LiveTrialState } from "@/lib/hooks/use-trial-live";
 import { cn } from "@/lib/utils";
 
+// Human explanations for the pipeline's typed error codes.
+export function explainErrorCode(code: string | null): string {
+  if (!code) return "File the case again; every stage reports its progress.";
+  if (code.startsWith("github_http")) {
+    return "GitHub rate-limited the repository lookup. Retry in a minute, or file the idea as text instead.";
+  }
+  if (code.includes("INFERENCE_API_KEY")) {
+    return "The scoring model is not configured on the server yet.";
+  }
+  if (code.startsWith("llm_") || code.startsWith("classification")) {
+    return "The scoring model returned an unusable answer. Filing again usually succeeds.";
+  }
+  return `Reason: ${code}`;
+}
+
 // Phase 3: deliberation state while scoring, then the real charts plus the
 // RAG-grounded rationale accordion with [ev:id] citations.
 export function VerdictPane({
@@ -30,7 +45,7 @@ export function VerdictPane({
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           {live.status === "FAILED"
-            ? "File the case again; every stage reports its progress."
+            ? explainErrorCode(live.errorCode)
             : "The verdict unlocks the moment scoring completes."}
         </p>
       </div>
