@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
@@ -181,6 +181,9 @@ export function TrialDashboard({
       });
       if (detail.runId) {
         setRunId(detail.runId);
+        // A new case starts on the pipeline's clock, never on a tab pinned
+        // during the previous case.
+        setChosenView(null);
       }
     }
 
@@ -203,8 +206,20 @@ export function TrialDashboard({
   const isLive = runId !== null;
   const activePhase = isLive ? phaseIndexFor(live.status) : 0;
   const states = phaseStates(live.status, isLive);
-  const displayedView = isLive ? (chosenView ?? activePhase) : 0;
   const failed = live.status === "FAILED";
+
+  // The pipeline advancing always retakes the window (founder rule: phase 1
+  // to phase 2 must actually switch). A manual tab choice holds only until
+  // the run reaches its next phase.
+  const lastActivePhaseRef = useRef(activePhase);
+  useEffect(() => {
+    if (activePhase !== lastActivePhaseRef.current) {
+      lastActivePhaseRef.current = activePhase;
+      setChosenView(null);
+    }
+  }, [activePhase]);
+
+  const displayedView = isLive ? (chosenView ?? activePhase) : 0;
 
   function switchRun(nextRunId: string) {
     setRunId(nextRunId);

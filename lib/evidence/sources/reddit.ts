@@ -74,7 +74,20 @@ async function redditBearerToken(): Promise<string | null> {
 // and the trial continues on the other sources.
 export const redditAdapter: EvidenceAdapter = {
   source: EvidenceSource.REDDIT,
-  async gather(idea) {
+  async gather(idea, { emit }) {
+    // Founder decision 2026-08-28, after reading Reddit's Responsible
+    // Builder Policy: Reddit is BYPASSED unless approved credentials are
+    // provided. No anonymous access, ever — with no credentials the source
+    // reports itself off and the trial proceeds on the other platforms.
+    const bearer = await redditBearerToken().catch(() => null);
+    if (!bearer) {
+      emit("source_disabled", {
+        source: EvidenceSource.REDDIT,
+        reason: "responsible_builder_policy",
+      });
+      return [];
+    }
+
     const query = [idea.category, ...idea.keywords.slice(0, 3)]
       .filter(Boolean)
       .join(" ");
@@ -84,19 +97,13 @@ export const redditAdapter: EvidenceAdapter = {
       `search:${query}`,
       CACHE_TTL_HOURS.REDDIT,
       async () => {
-        const bearer = await redditBearerToken();
         const params = `q=${encodeURIComponent(query)}&sort=relevance&t=year&limit=${MAX_ITEMS_PER_SOURCE * 2}&raw_json=1`;
-        const response = await fetch(
-          bearer
-            ? `https://oauth.reddit.com/search?${params}`
-            : `https://www.reddit.com/search.json?${params}`,
-          {
-            headers: {
-              "User-Agent": USER_AGENT,
-              ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
-            },
+        const response = await fetch(`https://oauth.reddit.com/search?${params}`, {
+          headers: {
+            "User-Agent": USER_AGENT,
+            authorization: `Bearer ${bearer}`,
           },
-        );
+        });
 
         if (!response.ok) {
           throw new Error(`reddit_http_${response.status}`);
