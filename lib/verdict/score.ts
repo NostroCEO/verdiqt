@@ -137,19 +137,33 @@ export async function scoreDimension(
       schema: resultSchema,
       schemaName: `DimensionScore:${dimension}`,
     });
-
-    const secondViolation = validateCitations(result, suppliedIds, knowledgeIds);
-    if (secondViolation) {
-      throw new Error(`llm_citation_violation:${dimension}`);
-    }
   }
 
-  // Persisted evidenceIds link to gathered evidence rows in the UI;
-  // knowledge passages stay inline-only.
+  // The anti-fabrication guarantee is enforced by SANITIZING, never by
+  // killing the trial (a mangled 25-char id executed a whole run for a typo,
+  // observed live 2026-08-28): unknown citations are stripped from the
+  // rationale and can never persist, and a high score left with too few
+  // surviving citations is capped in code below.
   result = {
     ...result,
+    rationale: result.rationale.replace(/\[ev:([^\]]+)\]/g, (token, id: string) =>
+      suppliedIds.has(id) || knowledgeIds.has(id) ? token : "",
+    ),
     evidenceIds: result.evidenceIds.filter((id) => suppliedIds.has(id)),
   };
+
+  if (
+    suppliedIds.size >= 2 &&
+    result.score > 40 &&
+    result.evidenceIds.length < 2
+  ) {
+    result = {
+      ...result,
+      score: 40,
+      rationale:
+        `${result.rationale} Score capped: too few verifiable citations survived review.`.trim(),
+    };
+  }
 
   // No evidence, no confidence: the cap is enforced here regardless of what
   // the model claimed.

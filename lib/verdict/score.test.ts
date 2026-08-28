@@ -73,7 +73,7 @@ describe("scoreDimension", () => {
     expect(result.rationale).toContain("insufficient");
   });
 
-  it("retries once on citations outside the supplied set, then fails typed", async () => {
+  it("retries once on ghost citations, then sanitizes instead of failing", async () => {
     mocks.structuredCall
       .mockResolvedValueOnce({ score: 70, rationale: "cites ghost [ev:zz]", evidenceIds: ["zz"] })
       .mockResolvedValueOnce({ score: 66, rationale: "fixed [ev:e1] [ev:e2]", evidenceIds: ["e1", "e2"] });
@@ -83,12 +83,22 @@ describe("scoreDimension", () => {
     expect(result.score).toBe(66);
     expect(mocks.structuredCall).toHaveBeenCalledTimes(2);
 
+    // A persistent ghost citation never kills the trial: the unknown id is
+    // stripped everywhere and the under-cited high score is capped at 40 in
+    // code (anti-fabrication holds; a typo is not a capital offense).
     mocks.structuredCall.mockReset();
     mocks.structuredCall.mockResolvedValue({ score: 70, rationale: "[ev:zz] again", evidenceIds: ["zz"] });
 
-    await expect(
-      scoreDimension(idea, "MONETIZATION", [evidenceItem("e1"), evidenceItem("e2")], []),
-    ).rejects.toThrow("llm_citation_violation");
+    const sanitized = await scoreDimension(
+      idea,
+      "MONETIZATION",
+      [evidenceItem("e1"), evidenceItem("e2")],
+      [],
+    );
+    expect(sanitized.score).toBe(40);
+    expect(sanitized.evidenceIds).toEqual([]);
+    expect(sanitized.rationale).not.toContain("[ev:zz]");
+    expect(sanitized.rationale).toContain("Score capped");
   });
 
   it("requires 2 citations for scores above 40 when 2+ items exist", async () => {
