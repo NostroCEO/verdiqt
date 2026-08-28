@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+export type LiveDimensionScore = { dimension: string; score: number };
+
 export type LiveTrialState = {
   status:
     | "QUEUED"
@@ -15,6 +17,9 @@ export type LiveTrialState = {
   evidenceCount: number;
   compositeScore: number | null;
   verdict: string | null;
+  dimensions: LiveDimensionScore[] | null;
+  pivotDirection: string | null;
+  nextStepAction: string | null;
   lastEventKind: string | null;
   connected: boolean;
   workerSeen: boolean;
@@ -26,6 +31,9 @@ const initialState: LiveTrialState = {
   evidenceCount: 0,
   compositeScore: null,
   verdict: null,
+  dimensions: null,
+  pivotDirection: null,
+  nextStepAction: null,
   lastEventKind: null,
   connected: false,
   workerSeen: false,
@@ -78,6 +86,32 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           connected: true,
           error: null,
         }));
+
+        // The full verdict payload (dimension scores for the radar, pivot
+        // direction, next step) exists only once the trial completes.
+        if (body.status === "COMPLETE") {
+          void fetch(`/api/trials/${encodeURIComponent(runId!)}/verdict`, {
+            cache: "no-store",
+            credentials: "include",
+          })
+            .then(async (verdictResponse) => {
+              if (cancelled || !verdictResponse.ok) return;
+              const verdictBody = (await verdictResponse.json()) as {
+                dimensions: Array<{ dimension: string; score: number }>;
+                pivot_direction: string | null;
+                next_step: { action?: string } | null;
+              };
+              setState((current) => ({
+                ...current,
+                dimensions: verdictBody.dimensions,
+                pivotDirection: verdictBody.pivot_direction,
+                nextStepAction: verdictBody.next_step?.action ?? null,
+              }));
+            })
+            .catch(() => {
+              // The composite and verdict already render from status.
+            });
+        }
 
         return body.status === "COMPLETE" || body.status === "FAILED";
       } catch {

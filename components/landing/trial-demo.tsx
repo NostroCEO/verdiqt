@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSyncExternalStore } from "react";
 import { useTrialLive } from "@/lib/hooks/use-trial-live";
+import { LiveVerdictPanel } from "@/components/landing/live-verdict-panel";
 import {
   getAgentChannelSnapshot,
   getAgentChannelServerSnapshot,
@@ -406,11 +407,24 @@ export function TrialDashboard({
                   <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
                     Gauge and radar
                   </p>
-                  {live.status === "COMPLETE" && live.verdict ? (
-                    <p className="mt-4 text-xs text-foreground">
-                      {live.verdict} at {live.compositeScore}. Full charts arrive with the
-                      verdict experience.
-                    </p>
+                  {live.status === "COMPLETE" &&
+                  live.verdict &&
+                  live.compositeScore !== null ? (
+                    live.dimensions && live.dimensions.length === 6 ? (
+                      <div className="mt-3">
+                        <LiveVerdictPanel
+                          compositeScore={live.compositeScore}
+                          verdict={live.verdict}
+                          dimensions={live.dimensions}
+                          pivotDirection={live.pivotDirection}
+                          nextStepAction={live.nextStepAction}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-xs text-foreground">
+                        {live.verdict} at {live.compositeScore}. Loading dimension scores.
+                      </p>
+                    )
                   ) : (
                     <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                       <LockKeyhole className="size-3.5" />
