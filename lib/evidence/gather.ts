@@ -30,11 +30,13 @@ export async function gatherAll(
   const items: RawEvidence[] = [];
 
   settled.forEach((result, index) => {
+    const source = evidenceAdapters[index].source;
     if (result.status === "fulfilled") {
       items.push(...result.value);
+      emit("source_gathered", { source, count: result.value.length });
     } else {
       emit("source_failed", {
-        source: evidenceAdapters[index].source,
+        source,
         reason:
           result.reason instanceof Error ? result.reason.message : "unknown",
       });
