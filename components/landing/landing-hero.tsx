@@ -121,6 +121,7 @@ export function LandingHero() {
       return;
     }
 
+    setValue("");
     setFeedback(
       "CASE " + submission.caseName.toUpperCase() + " OPENED. ENTERING THE COURTROOM.",
     );

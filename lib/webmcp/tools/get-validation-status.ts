@@ -6,7 +6,7 @@ export const getValidationStatusTool: ModelContextTool = {
   name: "get_validation_status",
   route: "GET /api/trials/:id/status",
   description:
-    "Get the current status, progress, pending approvals, and recent human actions for a validation trial. Call again after the human changes evidence, weights, or an approval. Statuses: QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, FAILED.",
+    "Poll a running trial by run_id. Statuses: QUEUED, NORMALIZING, GATHERING, CLASSIFYING, SCORING, COMPLETE, FAILED. Keep polling every few seconds while not terminal; when COMPLETE call get_verdict; when FAILED read error_code and tell the user why. Also returns evidence_count, per-source research states, the normalized case_file, pending approvals, and recent human actions — re-read after the human changes anything.",
   inputSchema: {
     type: "object",
     properties: {

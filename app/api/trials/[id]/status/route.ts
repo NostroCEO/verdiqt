@@ -100,6 +100,15 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
       createdAt: true,
       completedAt: true,
       _count: { select: { evidence: true } },
+      normalizedIdea: {
+        select: {
+          oneLiner: true,
+          audience: true,
+          problem: true,
+          category: true,
+          keywords: true,
+        },
+      },
       approvals: {
         where: { state: "PENDING_HUMAN_APPROVAL" },
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -140,6 +149,29 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
       select: { errorCode: true },
     });
     errorCode = failedRun?.errorCode ?? null;
+  }
+
+  // Per-source research states (founder demand: the user sees every search
+  // that ran, including refusals). Built from the pipeline's own
+  // source_gathered/source_failed/source_disabled events.
+  const sourceEvents = await prisma.trialEvent.findMany({
+    where: {
+      trialId: trial.id,
+      kind: { in: ["source_gathered", "source_failed", "source_disabled"] },
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    select: { kind: true, payload: true },
+  });
+
+  const sourceStates: Record<string, { state: string; count: number }> = {};
+  for (const event of sourceEvents) {
+    const payload = projectPayload(event.payload);
+    const source = typeof payload.source === "string" ? payload.source : null;
+    if (!source) continue;
+    sourceStates[source] = {
+      state: event.kind.replace("source_", ""),
+      count: typeof payload.count === "number" ? payload.count : 0,
+    };
   }
 
   const humanActions = await prisma.trialEvent.findMany({
@@ -185,5 +217,15 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
     created_at: trial.createdAt,
     completed_at: trial.completedAt,
     error_code: errorCode,
+    source_states: sourceStates,
+    case_file: trial.normalizedIdea
+      ? {
+          one_liner: trial.normalizedIdea.oneLiner,
+          audience: trial.normalizedIdea.audience,
+          problem: trial.normalizedIdea.problem,
+          category: trial.normalizedIdea.category,
+          keywords: trial.normalizedIdea.keywords,
+        }
+      : null,
   };
 }

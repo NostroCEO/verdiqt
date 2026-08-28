@@ -43,10 +43,15 @@ function hostOf(url: string) {
 export function ResearchPane({
   status,
   evidence,
+  sourceStates = {},
 }: {
   status: TrialStatusValue;
   evidence: LiveEvidenceItem[];
+  sourceStates?: Record<string, { state: string; count: number }>;
 }) {
+  const researching =
+    status === "NORMALIZING" || status === "GATHERING" || status === "CLASSIFYING";
+
   return (
     <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
       <div>
@@ -68,12 +73,76 @@ export function ResearchPane({
           ) : null}
           Evidence feed ({evidence.length} items from public sources)
         </p>
+
+        <div className="mb-2 flex flex-wrap gap-1" aria-label="Research sources">
+          {Object.entries(SOURCES).map(([key, source]) => {
+            const state = sourceStates[key];
+            const Icon = source.icon;
+            const searching = !state && researching;
+            return (
+              <span
+                key={key}
+                className={cn(
+                  "inline-flex items-center gap-1 border border-border px-1.5 py-0.5 font-mono text-[0.48rem] uppercase tracking-[0.06em]",
+                  state?.state === "gathered" && state.count > 0
+                    ? "text-foreground"
+                    : "text-muted-foreground",
+                )}
+              >
+                <Icon className="size-2.5 shrink-0" />
+                {source.label}
+                {searching ? (
+                  <motion.span
+                    aria-label="searching"
+                    animate={{ opacity: [1, 0.3, 1] }}
+                    transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+                  >
+                    ...
+                  </motion.span>
+                ) : state?.state === "gathered" ? (
+                  <span className="text-primary">{state.count}</span>
+                ) : state ? (
+                  <span>off</span>
+                ) : (
+                  <span>—</span>
+                )}
+              </span>
+            );
+          })}
+        </div>
+
         {evidence.length === 0 ? (
-          <div className="border border-border bg-background p-4 text-xs text-muted-foreground">
-            {status === "GATHERING" || status === "NORMALIZING"
-              ? "Searching Hacker News, GitHub, Product Hunt, Reddit, and Stack Overflow for this case..."
-              : "No evidence gathered yet."}
-          </div>
+          researching ? (
+            <div
+              aria-label="Evidence is loading"
+              className="border border-border bg-background p-3"
+            >
+              {[0, 1, 2].map((row) => (
+                <motion.div
+                  key={row}
+                  animate={{ opacity: [0.35, 0.7, 0.35] }}
+                  transition={{
+                    duration: 1.6,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                    delay: row * 0.25,
+                  }}
+                  className="mb-2 last:mb-0"
+                >
+                  <div className="h-2.5 w-3/4 bg-border" />
+                  <div className="mt-1.5 h-2 w-1/2 bg-border/70" />
+                </motion.div>
+              ))}
+              <p className="mt-3 text-xs text-muted-foreground">
+                Searching Hacker News, GitHub, Product Hunt, Reddit, and Stack
+                Overflow for this case...
+              </p>
+            </div>
+          ) : (
+            <div className="border border-border bg-background p-4 text-xs text-muted-foreground">
+              No evidence gathered yet.
+            </div>
+          )
         ) : (
           <ul className="max-h-72 overflow-y-auto border border-border bg-background">
             <AnimatePresence initial={false}>

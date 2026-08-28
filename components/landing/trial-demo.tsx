@@ -422,19 +422,49 @@ export function TrialDashboard({
                 <AnimatePresence initial={false} mode="wait">
                   <motion.div
                     key={displayedView}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -4 }}
-                    transition={{ type: "spring", visualDuration: 0.25, bounce: 0.1 }}
+                    initial={{ opacity: 0, x: 28 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -28 }}
+                    transition={{ type: "spring", visualDuration: 0.45, bounce: 0.16 }}
                     className="mt-3"
                   >
                     {displayedView === 0 ? (
-                      <div className="border border-border bg-background p-4 text-xs leading-5 text-foreground/80">
-                        The case is filed and the run is live. Phase 2 shows the
-                        research as it happens; Phase 3 holds the verdict.
-                      </div>
+                      live.caseFile ? (
+                        <div className="border border-border bg-background p-4">
+                          <p className="font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
+                            The case as the court read it
+                          </p>
+                          <p className="mt-2 text-sm text-foreground">
+                            {live.caseFile.oneLiner}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-foreground/70">
+                            Audience: {live.caseFile.audience}. Problem:{" "}
+                            {live.caseFile.problem}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {live.caseFile.keywords.map((keyword) => (
+                              <span
+                                key={keyword}
+                                className="border border-border px-1.5 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.06em] text-muted-foreground"
+                              >
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-border bg-background p-4 text-xs leading-5 text-foreground/80">
+                          The case is filed and the run is live. The court is
+                          reading it now; Phase 2 shows the research as it
+                          happens and Phase 3 holds the verdict.
+                        </div>
+                      )
                     ) : displayedView === 1 ? (
-                      <ResearchPane status={live.status} evidence={live.evidence} />
+                      <ResearchPane
+                        status={live.status}
+                        evidence={live.evidence}
+                        sourceStates={live.sourceStates}
+                      />
                     ) : (
                       <VerdictPane live={live} onFileAnother={returnToIntake} />
                     )}

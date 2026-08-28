@@ -5,7 +5,7 @@ export const startValidationTool: ModelContextTool = {
   name: "start_validation",
   route: "POST /api/trials",
   description:
-    "Start a validation trial for a SaaS idea. Provide either idea_text describing the idea, or repo_url pointing to a public GitHub repository. Returns a run_id to poll with get_validation_status.",
+    "START HERE to validate a SaaS idea. Provide either idea_text describing the idea, or repo_url pointing to a public GitHub repository. Returns a run_id. WORKFLOW: 1) call this, 2) poll get_validation_status every few seconds until status is COMPLETE (about 30s), 3) call get_verdict for the final BUILD/PIVOT/KILL ruling, 4) optionally get_evidence and get_next_step. Report the verdict, score, and next step to the user.",
   inputSchema: {
     type: "object",
     properties: {

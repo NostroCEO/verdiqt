@@ -57,6 +57,9 @@ describe("normalizeIdea", () => {
       name: "acme/tool",
       description: "writes changelogs",
       readmeExcerpt: "Generates release notes from commits",
+      language: "TypeScript",
+      topics: ["changelog", "automation"],
+      stars: 420,
     });
     mocks.structuredCall.mockResolvedValue(normalized);
 

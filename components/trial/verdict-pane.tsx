@@ -33,6 +33,7 @@ export function VerdictPane({
   onFileAnother: () => void;
 }) {
   const [openDimension, setOpenDimension] = useState<string | null>(null);
+  const evidenceById = new Map(live.evidence.map((item) => [item.id, item]));
 
   if (live.status !== "COMPLETE") {
     return (
@@ -69,10 +70,27 @@ export function VerdictPane({
         <p className="text-xs text-muted-foreground">Loading the verdict…</p>
       )}
 
+      {live.benchOpinion ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", visualDuration: 0.35, bounce: 0.2 }}
+          className="mt-4 border border-primary/40 bg-background"
+        >
+          <p className="border-b border-border px-3 py-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
+            The bench&apos;s ruling
+            {live.benchConfidence !== null ? ` · confidence ${live.benchConfidence}/100` : ""}
+          </p>
+          <p className="px-3 py-3 text-xs leading-5 text-foreground/90">
+            {live.benchOpinion}
+          </p>
+        </motion.div>
+      ) : null}
+
       {live.dimensions ? (
         <div className="mt-4 border border-border bg-background">
           <p className="border-b border-border px-3 py-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
-            The reasoning, grounded in cited evidence
+            The panel&apos;s reasoning, grounded in cited evidence
           </p>
           {live.dimensions.map((dimension) => {
             const open = openDimension === dimension.dimension;
@@ -98,13 +116,45 @@ export function VerdictPane({
                   />
                 </button>
                 {open ? (
-                  <motion.p
+                  <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="border-t border-border/60 bg-surface px-3 py-3 text-xs leading-5 text-foreground/80"
+                    className="border-t border-border/60 bg-surface px-3 py-3"
                   >
-                    {dimension.rationale}
-                  </motion.p>
+                    <p className="text-xs leading-5 text-foreground/80">
+                      {dimension.rationale}
+                    </p>
+                    {(() => {
+                      const cited = dimension.evidenceIds
+                        .map((id) => evidenceById.get(id))
+                        .filter((item): item is NonNullable<typeof item> => Boolean(item));
+                      if (cited.length === 0) return null;
+                      return (
+                        <div className="mt-2 border-t border-border/50 pt-2">
+                          <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
+                            Sources cited
+                          </p>
+                          <ul className="mt-1 space-y-1">
+                            {cited.map((item) => (
+                              <li key={item.id} className="flex items-center gap-2">
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="min-w-0 flex-1 truncate text-[0.68rem] text-foreground underline decoration-border underline-offset-2 hover:text-primary"
+                                >
+                                  {item.title}
+                                </a>
+                                <span className="shrink-0 font-mono text-[0.48rem] uppercase tracking-[0.06em] text-muted-foreground">
+                                  {item.source.replaceAll("_", " ")}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
+                  </motion.div>
                 ) : null}
               </div>
             );

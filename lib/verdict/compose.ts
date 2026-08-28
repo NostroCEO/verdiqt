@@ -132,6 +132,17 @@ export function selectNextStep(
   };
 }
 
+export function verdictForComposite(compositeScore: number): VerdictKind {
+  return compositeScore >= 70 ? "BUILD" : compositeScore >= 40 ? "PIVOT" : "KILL";
+}
+
+export function pivotDirectionFor(
+  scores: DimensionScores,
+  verdict: VerdictKind,
+): string | null {
+  return verdict === "PIVOT" ? PIVOT_TEMPLATES[strongest(scores)] : null;
+}
+
 export function composeVerdict(
   scores: DimensionScores,
   weights: DimensionScores,
@@ -148,11 +159,9 @@ export function composeVerdict(
     ) / 100,
   );
 
-  const verdict: VerdictKind =
-    compositeScore >= 70 ? "BUILD" : compositeScore >= 40 ? "PIVOT" : "KILL";
+  const verdict = verdictForComposite(compositeScore);
 
-  const pivotDirection =
-    verdict === "PIVOT" ? PIVOT_TEMPLATES[strongest(scores)] : null;
+  const pivotDirection = pivotDirectionFor(scores, verdict);
 
   return {
     compositeScore,

@@ -6,7 +6,7 @@ export const getVerdictTool: ModelContextTool = {
   name: "get_verdict",
   route: "GET /api/trials/:id/verdict",
   description:
-    "Get the full scored verdict for a completed trial: composite score, BUILD or PIVOT or KILL, six dimension scores with rationales and evidence citations, and the recommended next step.",
+    "Get the final ruling for a COMPLETE trial: composite score 0-100, BUILD (70+) / PIVOT (40-69) / KILL (<40), six dimension scores with rationales and evidence citations, the bench's written opinion (next_step.bench_opinion), and the single recommended next step. Summarize the verdict, the bench opinion, and the next step for the user; cite evidence via get_evidence when asked for proof.",
   inputSchema: {
     type: "object",
     properties: {

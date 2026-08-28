@@ -5,6 +5,9 @@ export type RepoBrief = {
   name: string;
   description: string;
   readmeExcerpt: string;
+  language: string;
+  topics: string[];
+  stars: number;
 };
 
 const README_MAX_CHARS = 4000;
@@ -61,9 +64,13 @@ export async function fetchRepoBrief(repoUrl: string): Promise<RepoBrief> {
     `brief:${slug}`,
     CACHE_TTL_HOURS.GITHUB_METADATA,
     async () => {
-      const meta = await githubJson<{ full_name: string; description?: string | null }>(
-        `/repos/${slug}`,
-      );
+      const meta = await githubJson<{
+        full_name: string;
+        description?: string | null;
+        language?: string | null;
+        topics?: string[];
+        stargazers_count?: number;
+      }>(`/repos/${slug}`);
 
       let readmeExcerpt = "";
       try {
@@ -84,6 +91,9 @@ export async function fetchRepoBrief(repoUrl: string): Promise<RepoBrief> {
         name: meta.full_name,
         description: sanitizeSnippet(meta.description ?? "", 300),
         readmeExcerpt,
+        language: sanitizeSnippet(meta.language ?? "", 40),
+        topics: (meta.topics ?? []).slice(0, 10).map((t) => sanitizeSnippet(t, 40)),
+        stars: meta.stargazers_count ?? 0,
       };
     },
   );

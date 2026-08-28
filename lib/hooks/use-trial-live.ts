@@ -37,6 +37,16 @@ export type LiveTrialState = {
   dimensions: LiveDimensionScore[] | null;
   pivotDirection: string | null;
   nextStepAction: string | null;
+  benchOpinion: string | null;
+  benchConfidence: number | null;
+  sourceStates: Record<string, { state: string; count: number }>;
+  caseFile: {
+    oneLiner: string;
+    audience: string;
+    problem: string;
+    category: string;
+    keywords: string[];
+  } | null;
   lastEventKind: string | null;
   connected: boolean;
   workerSeen: boolean;
@@ -53,6 +63,10 @@ const initialState: LiveTrialState = {
   dimensions: null,
   pivotDirection: null,
   nextStepAction: null,
+  benchOpinion: null,
+  benchConfidence: null,
+  sourceStates: {},
+  caseFile: null,
   lastEventKind: null,
   connected: false,
   workerSeen: false,
@@ -74,9 +88,14 @@ export function useTrialLive(runId: string | null): LiveTrialState {
   const statusRef = useRef<TrialStatusValue>(null);
 
   useEffect(() => {
+    // EVERY run change starts from a clean slate (founder bug report
+    // 2026-08-28: filing another case kept the previous case's evidence and
+    // verdict on screen, mixing two cases). Evidence merges are per-run only.
+    setState(initialState);
+    sawStageEventRef.current = false;
+    statusRef.current = null;
+
     if (!runId) {
-      setState(initialState);
-      sawStageEventRef.current = false;
       return;
     }
 
@@ -103,7 +122,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             evidence_ids: string[];
           }>;
           pivot_direction: string | null;
-          next_step: { action?: string } | null;
+          next_step: {
+            action?: string;
+            bench_opinion?: string;
+            bench_confidence?: number;
+          } | null;
         };
         setState((current) => ({
           ...current,
@@ -115,6 +138,8 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           })),
           pivotDirection: body.pivot_direction,
           nextStepAction: body.next_step?.action ?? null,
+          benchOpinion: body.next_step?.bench_opinion ?? null,
+          benchConfidence: body.next_step?.bench_confidence ?? null,
         }));
       } catch {
         verdictFetched = false;
@@ -180,6 +205,14 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           composite_score: number | null;
           verdict: string | null;
           error_code?: string | null;
+          source_states?: Record<string, { state: string; count: number }>;
+          case_file?: {
+            one_liner: string;
+            audience: string;
+            problem: string;
+            category: string;
+            keywords: string[];
+          } | null;
         };
 
         statusRef.current = body.status;
@@ -190,6 +223,16 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           compositeScore: body.composite_score,
           verdict: body.verdict,
           errorCode: body.error_code ?? null,
+          sourceStates: body.source_states ?? current.sourceStates,
+          caseFile: body.case_file
+            ? {
+                oneLiner: body.case_file.one_liner,
+                audience: body.case_file.audience,
+                problem: body.case_file.problem,
+                category: body.case_file.category,
+                keywords: body.case_file.keywords,
+              }
+            : current.caseFile,
           connected: true,
           workerSeen: hasWorkerProgress({
             status: body.status,

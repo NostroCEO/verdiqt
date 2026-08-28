@@ -70,6 +70,10 @@ export function CourtroomIntake() {
     }
 
     if (submission.outcome === "live") {
+      // A filed case leaves a clean desk: stale text from the previous case
+      // must never sit in the input when the next one is typed (founder bug
+      // report 2026-08-28).
+      setValue("");
       setFeedback(
         "CASE " + submission.caseName.toUpperCase() + " FILED. THE COURT IS IN SESSION.",
       );
@@ -87,6 +91,7 @@ export function CourtroomIntake() {
       return;
     }
 
+    setValue("");
     setFeedback(
       "CASE " + submission.caseName.toUpperCase() + " LOADED INTO PHASE 1 BELOW.",
     );

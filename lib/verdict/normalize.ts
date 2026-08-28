@@ -42,11 +42,28 @@ export async function normalizeIdea(input: {
       // NAME is still real data, so normalization degrades to it instead
       // of failing the whole trial.
       const slug = input.repoUrl.replace(/^https?:\/\/(www\.)?github\.com\//, "");
-      brief = { name: slug, description: "", readmeExcerpt: "" };
+      brief = {
+        name: slug,
+        description: "",
+        readmeExcerpt: "",
+        language: "",
+        topics: [],
+        stars: 0,
+      };
     }
+    // Cached briefs from before the wider shape may lack these fields.
+    const topics = brief.topics ?? [];
+    const metaLine = [
+      `${brief.name}: ${brief.description}`,
+      brief.language ? `language ${brief.language}` : "",
+      topics.length > 0 ? `topics: ${topics.join(", ")}` : "",
+      (brief.stars ?? 0) > 0 ? `${brief.stars} stars` : "",
+    ]
+      .filter(Boolean)
+      .join(" | ");
     user = [
       "Infer the SaaS idea this repository implements.",
-      wrapEvidence("repo-meta", "GITHUB", `${brief.name}: ${brief.description}`),
+      wrapEvidence("repo-meta", "GITHUB", metaLine),
       wrapEvidence(
         "repo-readme",
         "GITHUB",

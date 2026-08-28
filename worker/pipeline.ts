@@ -16,7 +16,14 @@ import type { EvidenceEmitter, NormalizedIdea } from "@/lib/evidence/types";
 import { retrieveGrounding } from "@/lib/brain/retrieve";
 import { TRIAL_CAPS } from "@/lib/llm";
 import { classifyEvidence } from "@/lib/verdict/classify";
-import { composeVerdict, type DimensionScores } from "@/lib/verdict/compose";
+import { benchReview } from "@/lib/verdict/bench";
+import {
+  composeVerdict,
+  pivotDirectionFor,
+  selectNextStep,
+  verdictForComposite,
+  type DimensionScores,
+} from "@/lib/verdict/compose";
 import { normalizeIdea } from "@/lib/verdict/normalize";
 import { scoreDimension, type ScorableEvidence } from "@/lib/verdict/score";
 import { DIMENSIONS, validateWeights, DEFAULT_WEIGHTS } from "@/lib/verdict/weights";
@@ -189,6 +196,7 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
   });
 
   const scores = {} as DimensionScores;
+  const rationales = {} as Record<Dimension, string>;
 
   for (const dimension of DIMENSIONS) {
     const dimensionEvidence: ScorableEvidence[] = allEvidence
@@ -227,6 +235,7 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
 
     const result = await scoreDimension(idea, dimension, dimensionEvidence, knowledge);
     scores[dimension] = result.score;
+    rationales[dimension] = result.rationale;
 
     await prisma.dimensionScore.upsert({
       where: { trialId_dimension: { trialId: ctx.trialId, dimension } },
@@ -247,6 +256,56 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
 
   const composed = composeVerdict(scores, weights);
 
+  // Judge 2, the bench (founder directive 2026-08-28): a second agent reads
+  // the whole case file and delivers the FINAL verdict, so phase 3 is an
+  // objective per-case ruling. The panel's math stays the anchor: the bench
+  // adjusts within +-8 and the thresholds re-apply in code. A bench failure
+  // falls back to the panel result — it never kills the trial.
+  void emitEvent({
+    trialId: ctx.trialId,
+    pipelineRunId: ctx.runId,
+    actor: Actor.SYSTEM,
+    kind: "bench_deliberating",
+    dedupeKey: `${ctx.runId}:bench_deliberating`,
+    payload: { revision: ctx.revision, stage: "BENCH_REVIEW" },
+  }).catch(() => {});
+
+  const bench = await benchReview({
+    idea,
+    dimensions: DIMENSIONS.map((dimension) => ({
+      dimension,
+      score: scores[dimension],
+      rationale: rationales[dimension] ?? "",
+    })),
+    mathComposite: composed.compositeScore,
+    evidenceCount: allEvidence.length,
+  }).catch((error: unknown) => {
+    console.error("bench review failed", error);
+    return null;
+  });
+
+  let compositeScore = composed.compositeScore;
+  let verdict = composed.verdict;
+  let pivotDirection = composed.pivotDirection;
+  let nextStep: Record<string, unknown> = composed.nextStep as unknown as Record<
+    string,
+    unknown
+  >;
+
+  if (bench) {
+    compositeScore = Math.max(
+      0,
+      Math.min(100, composed.compositeScore + bench.compositeAdjustment),
+    );
+    verdict = verdictForComposite(compositeScore);
+    pivotDirection = pivotDirectionFor(scores, verdict);
+    nextStep = {
+      ...selectNextStep(scores, weights, verdict),
+      bench_opinion: bench.opinion,
+      bench_confidence: bench.confidence,
+    };
+  }
+
   if (await isSuperseded(ctx)) {
     await markSuperseded(ctx);
     return null;
@@ -256,10 +315,10 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
     where: { id: ctx.trialId },
     data: {
       status: TrialStatus.COMPLETE,
-      compositeScore: composed.compositeScore,
-      verdict: composed.verdict,
-      pivotDirection: composed.pivotDirection,
-      nextStep: composed.nextStep as unknown as Prisma.InputJsonObject,
+      compositeScore,
+      verdict,
+      pivotDirection,
+      nextStep: nextStep as Prisma.InputJsonObject,
       completedRevision: ctx.revision,
       completedAt: new Date(),
     },
@@ -276,12 +335,12 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
     dedupeKey: `${ctx.runId}:trial_completed`,
     payload: {
       revision: ctx.revision,
-      compositeScore: composed.compositeScore,
-      verdict: composed.verdict,
+      compositeScore,
+      verdict,
     },
   });
 
-  return composed;
+  return { ...composed, compositeScore, verdict, pivotDirection };
 }
 
 // Real five-stage pipeline. FULL runs everything; RESCORE reuses stored
