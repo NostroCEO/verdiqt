@@ -116,7 +116,7 @@ export async function POST(request: Request) {
     if (!judge) {
       const ip =
         request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
-      const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "5");
+      const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "15");
       const { allowed } = await checkRateLimit(hashIp(`trials:${ip}`), limit);
 
       if (!allowed) {
