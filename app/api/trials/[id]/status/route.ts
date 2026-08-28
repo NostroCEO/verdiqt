@@ -112,6 +112,18 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  // A FAILED trial names its reason (our own typed error strings, safe to
+  // expose): nobody should have to guess why a run died.
+  let errorCode: string | null = null;
+  if (trial.status === "FAILED") {
+    const failedRun = await prisma.pipelineRun.findFirst({
+      where: { trialId: trial.id, status: "FAILED" },
+      orderBy: { revision: "desc" },
+      select: { errorCode: true },
+    });
+    errorCode = failedRun?.errorCode ?? null;
+  }
+
   const humanActions = await prisma.trialEvent.findMany({
     where: { trialId: trial.id, actor: "HUMAN" },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -154,5 +166,6 @@ export async function GET(
     })),
     created_at: trial.createdAt,
     completed_at: trial.completedAt,
+    error_code: errorCode,
   });
 }

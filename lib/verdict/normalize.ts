@@ -31,11 +31,27 @@ export async function normalizeIdea(input: {
   let user: string;
 
   if (input.repoUrl) {
-    const brief = await fetchRepoBrief(input.repoUrl);
+    let brief;
+    try {
+      brief = await fetchRepoBrief(input.repoUrl);
+    } catch (error) {
+      if (error instanceof Error && error.message === "invalid_repo_url") {
+        throw error;
+      }
+      // GitHub can rate-limit unauthenticated cloud IPs; the repository
+      // NAME is still real data, so normalization degrades to it instead
+      // of failing the whole trial.
+      const slug = input.repoUrl.replace(/^https?:\/\/(www\.)?github\.com\//, "");
+      brief = { name: slug, description: "", readmeExcerpt: "" };
+    }
     user = [
       "Infer the SaaS idea this repository implements.",
       wrapEvidence("repo-meta", "GITHUB", `${brief.name}: ${brief.description}`),
-      wrapEvidence("repo-readme", "GITHUB", brief.readmeExcerpt || "no readme"),
+      wrapEvidence(
+        "repo-readme",
+        "GITHUB",
+        brief.readmeExcerpt || "no readme available; infer from the repository name",
+      ),
     ].join("\n");
   } else {
     user = `Normalize this idea: ${sanitizeSnippet(input.ideaText ?? "", 2000)}`;
