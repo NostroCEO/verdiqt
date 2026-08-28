@@ -13,18 +13,37 @@ import { cn, safeHttpUrl } from "@/lib/utils";
 export function explainErrorCode(code: string | null): string {
   if (!code) return "File the case again; every stage reports its progress.";
   if (code.startsWith("github_http")) {
-    return "GitHub rate-limited the repository lookup. Retry in a minute, or file the idea as text instead.";
+    const status = code.replace("github_http_", "");
+    if (status === "403" || status === "429") {
+      return "GitHub rate-limited the repository lookup. Retry in a minute, or file the idea as text instead.";
+    }
+    if (status === "404") {
+      return "The GitHub repository was not found. Check the URL and make sure it is public.";
+    }
+    return `GitHub returned an error (HTTP ${status}). Try again or file the idea as text instead.`;
+  }
+  if (code.includes("invalid_repo_url")) {
+    return "The URL does not point to a valid GitHub repository (expected github.com/owner/repo).";
   }
   if (code.includes("INFERENCE_API_KEY")) {
-    return "The scoring model is not configured on the server yet.";
+    return "The scoring model is not configured on the server — the API key is missing.";
   }
   if (code.includes("llm_rate_limited")) {
-    return "The court's free reasoning quota is exhausted for now. It refills automatically — try again in a while (quotas reset daily at midnight UTC).";
+    return "The daily AI quota has been reached — the free inference tier caps how many trials can run per day. The quota resets automatically at midnight UTC.";
+  }
+  if (code.includes("classification_all_batches_failed")) {
+    return "Evidence classification failed — the AI could not sort the gathered evidence into dimensions. Filing again usually succeeds.";
+  }
+  if (code.startsWith("llm_schema_violation")) {
+    return "The AI returned a malformed answer. Filing the case again usually succeeds.";
   }
   if (code.startsWith("llm_") || code.startsWith("classification")) {
     return "The scoring model returned an unusable answer. Filing again usually succeeds.";
   }
-  return `Reason: ${code}`;
+  if (code.includes("normalize_requires")) {
+    return "The case was missing both a SaaS idea and a repository URL.";
+  }
+  return `The trial failed: ${code.replaceAll("_", " ")}`;
 }
 
 // Phase 3: deliberation state while scoring, then the real charts plus the
