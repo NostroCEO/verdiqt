@@ -55,8 +55,26 @@ function extractJson(raw: string): unknown {
   return JSON.parse(trimmed.slice(start, end + 1));
 }
 
+const RATE_LIMIT_WAITS_MS = [10_000, 25_000, 60_000];
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimit(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    (error as { status?: number }).status === 429
+  );
+}
+
 // One structured call: JSON-mode request, zod validation, exactly one repair
 // retry on schema violation (the plan's bound), then a typed failure.
+// Free-tier per-minute rate limits (Groq 429s) are waited out instead of
+// failing the trial: the worker is serial, so blocking here is safe and the
+// window clears within a minute.
 export async function structuredCall<T>(input: {
   system: string;
   user: string;
@@ -66,7 +84,7 @@ export async function structuredCall<T>(input: {
   const client = getLlmClient();
   const model = inferenceModel();
 
-  const request = (repairNote?: string) =>
+  const rawRequest = (repairNote?: string) =>
     client.chat.completions.create({
       model,
       response_format: { type: "json_object" },
@@ -80,6 +98,19 @@ export async function structuredCall<T>(input: {
         },
       ],
     });
+
+  const request = async (repairNote?: string) => {
+    for (const waitMs of RATE_LIMIT_WAITS_MS) {
+      try {
+        return await rawRequest(repairNote);
+      } catch (error) {
+        if (!isRateLimit(error)) throw error;
+        console.warn(`groq 429; waiting ${waitMs}ms before retrying`);
+        await sleep(waitMs);
+      }
+    }
+    return rawRequest(repairNote);
+  };
 
   const first = await request();
   const firstParsed = input.schema.safeParse(

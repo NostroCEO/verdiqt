@@ -199,8 +199,13 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
   const rationales = {} as Record<Dimension, string>;
 
   for (const dimension of DIMENSIONS) {
+    // Ten strongest items are plenty for one dimension's scoring prompt;
+    // larger prompts were blowing through the free tier's per-minute token
+    // window across six back-to-back calls (observed live 2026-08-28).
     const dimensionEvidence: ScorableEvidence[] = allEvidence
       .filter((row) => row.dimension === dimension)
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 10)
       .map((row) => ({
         id: row.id,
         humanState: row.humanState,
