@@ -1,26 +1,9 @@
-import { getStartedBoss, RUN_TRIAL_QUEUE, type RunTrialJob } from "@/lib/queue";
-import { claimRun, runPipeline } from "@/worker/pipeline";
+import { startWorker } from "@/lib/worker-boot";
 
-// Long-running background worker (Render Background Worker service; the
-// render.yaml entry is added at the founder-approved paid-plan gate).
+// Standalone worker entry (local development and any future dedicated
+// worker service). The colocated production path boots via instrumentation.
 async function main() {
-  const boss = await getStartedBoss();
-
-  await boss.work<RunTrialJob>(RUN_TRIAL_QUEUE, async (jobs) => {
-    for (const job of jobs) {
-      const { pipelineRunId } = job.data;
-
-      const claimed = await claimRun(pipelineRunId);
-      if (!claimed) {
-        // Duplicate delivery or already-terminal run: nothing to do.
-        continue;
-      }
-
-      await runPipeline(pipelineRunId);
-    }
-  });
-
-  console.log(`verdiqt worker listening on queue "${RUN_TRIAL_QUEUE}"`);
+  const boss = await startWorker();
 
   const shutdown = async () => {
     console.log("verdiqt worker stopping");
