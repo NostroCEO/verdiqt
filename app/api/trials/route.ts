@@ -3,7 +3,12 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 
 import type { AnonymousCookieStore } from "@/lib/access";
+import { isValidJudgeCookie, JUDGE_COOKIE } from "@/lib/judge";
+import { checkRateLimit, hashIp } from "@/lib/ratelimit";
 import { startTrial } from "@/lib/trials/start";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const startTrialSchema = z
   .object({
@@ -59,6 +64,27 @@ export async function POST(request: Request) {
 
   try {
     const cookieStore = (await cookies()) as unknown as AnonymousCookieStore;
+
+    // The judge cookie bypasses ONLY the anonymous creation limit; it grants
+    // no ownership, no approvals, nothing else.
+    const judge = isValidJudgeCookie(cookieStore.get(JUDGE_COOKIE)?.value);
+    if (!judge) {
+      const ip =
+        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+      const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "5");
+      const { allowed } = await checkRateLimit(hashIp(`trials:${ip}`), limit);
+
+      if (!allowed) {
+        return NextResponse.json(
+          {
+            error: "rate_limited",
+            retry_hint:
+              "The anonymous limit resets at midnight UTC. Judges can unlock at /judge.",
+          },
+          { status: 429 },
+        );
+      }
+    }
     const trial = await startTrial({ ...parsed.data, cookieStore });
 
     return NextResponse.json(trial, { status: 202 });

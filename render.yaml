@@ -1,9 +1,38 @@
 # yaml-language-server: $schema=https://render.com/schema/render.yaml.json
 
-# Render Blueprints cannot represent a zero-instance worker. Task 4 adds
-# verdiqt-worker after its queue entrypoint exists and the founder approves
-# the paid worker instance.
+# verdiqt-worker is paid from the founder's participant credits (approved
+# 2026-08-28, zero cash). Its start runs the idempotent migrate:deploy so the
+# schema always precedes both services' first queries.
 services:
+  - type: worker
+    name: verdiqt-worker
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: corepack enable && pnpm install --frozen-lockfile
+    startCommand: pnpm migrate:deploy && pnpm worker
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22.23.2"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: verdiqt-db
+          property: connectionString
+      - key: DIRECT_DATABASE_URL
+        fromDatabase:
+          name: verdiqt-db
+          property: connectionString
+      - key: INFERENCE_BASE_URL
+        value: "https://api.groq.com/openai/v1"
+      - key: INFERENCE_MODEL
+        value: "openai/gpt-oss-120b"
+      - key: INFERENCE_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+      - key: PRODUCT_HUNT_TOKEN
+        sync: false
   - type: web
     name: verdiqt-web
     runtime: node
@@ -27,7 +56,7 @@ services:
       - key: RATE_LIMIT_TRIALS_PER_DAY
         value: "5"
       - key: PUBLIC_TRIALS_ENABLED
-        value: "false"
+        value: "true"
       - key: GITHUB_OAUTH_ENABLED
         value: "false"
 

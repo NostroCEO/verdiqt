@@ -1,82 +1,313 @@
-import { Actor, PipelineRunStatus, TrialStatus } from "@prisma/client";
+import { createHash } from "node:crypto";
+
+import {
+  Actor,
+  PipelineRunKind,
+  PipelineRunStatus,
+  TrialStatus,
+  type Dimension,
+  type Prisma,
+} from "@prisma/client";
 
 import { prisma } from "@/lib/db";
 import { emitEvent } from "@/lib/events";
+import { gatherAll } from "@/lib/evidence/gather";
+import type { EvidenceEmitter, NormalizedIdea } from "@/lib/evidence/types";
+import { retrieveKnowledge } from "@/lib/brain/retrieve";
+import { TRIAL_CAPS } from "@/lib/llm";
+import { classifyEvidence } from "@/lib/verdict/classify";
+import { composeVerdict, type DimensionScores } from "@/lib/verdict/compose";
+import { normalizeIdea } from "@/lib/verdict/normalize";
+import { scoreDimension, type ScorableEvidence } from "@/lib/verdict/score";
+import { DIMENSIONS, validateWeights, DEFAULT_WEIGHTS } from "@/lib/verdict/weights";
 
 const LEASE_MINUTES = 5;
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+type RunContext = {
+  runId: string;
+  revision: number;
+  kind: PipelineRunKind;
+  trialId: string;
+};
+
+function fingerprint(source: string, url: string) {
+  return createHash("sha256").update(`${source}:${url}`).digest("hex");
 }
 
-// Task 4 stub pipeline: NORMALIZING then COMPLETE with a fixed composite
-// score, staged events one second apart. Task 11 replaces the body with the
-// real five stages; the claim/idempotency contract below is permanent.
-// Delivery is at-least-once: every write is conditional or dedupe-keyed, so
-// a duplicate or resumed delivery cannot double-apply.
-export async function runPipeline(
-  pipelineRunId: string,
-  { stageDelayMs = 1000 }: { stageDelayMs?: number } = {},
-) {
+function sourceHash(input: { ideaText?: string | null; repoUrl?: string | null }) {
+  return createHash("sha256")
+    .update(`${input.ideaText ?? ""}:${input.repoUrl ?? ""}`)
+    .digest("hex");
+}
+
+async function setStage(ctx: RunContext, stage: TrialStatus) {
+  await prisma.trial.update({
+    where: { id: ctx.trialId },
+    data: { status: stage },
+  });
+  await emitEvent({
+    trialId: ctx.trialId,
+    pipelineRunId: ctx.runId,
+    actor: Actor.SYSTEM,
+    kind: "stage_started",
+    dedupeKey: `${ctx.runId}:stage:${stage}`,
+    payload: { stage, revision: ctx.revision },
+  });
+}
+
+function makeEmitter(ctx: RunContext): EvidenceEmitter {
+  return (kind, payload) => {
+    void emitEvent({
+      trialId: ctx.trialId,
+      pipelineRunId: ctx.runId,
+      actor: Actor.SYSTEM,
+      kind,
+      dedupeKey: `${ctx.runId}:src:${payload.source}:${kind}:${payload.reason ?? ""}`,
+      payload,
+    }).catch(() => {
+      // Event emission must never fail a stage.
+    });
+  };
+}
+
+// A stale revision must never overwrite a newer result: the guard runs at
+// claim time and again immediately before the terminal write.
+async function isSuperseded(ctx: RunContext) {
+  const trial = await prisma.trial.findUnique({
+    where: { id: ctx.trialId },
+    select: { pipelineRevision: true },
+  });
+  return !trial || trial.pipelineRevision > ctx.revision;
+}
+
+async function markSuperseded(ctx: RunContext) {
+  await prisma.pipelineRun.update({
+    where: { id: ctx.runId },
+    data: { status: PipelineRunStatus.SUPERSEDED, completedAt: new Date() },
+  });
+}
+
+async function stageNormalize(
+  ctx: RunContext,
+  trial: { ideaText: string | null; repoUrl: string | null },
+): Promise<NormalizedIdea> {
+  await setStage(ctx, TrialStatus.NORMALIZING);
+
+  const existing = await prisma.normalizedIdea.findUnique({
+    where: { trialId: ctx.trialId },
+  });
+  const hash = sourceHash(trial);
+
+  if (existing && existing.sourceHash === hash) {
+    return {
+      oneLiner: existing.oneLiner,
+      audience: existing.audience,
+      problem: existing.problem,
+      category: existing.category,
+      keywords: existing.keywords,
+    };
+  }
+
+  const idea = await normalizeIdea({
+    ideaText: trial.ideaText ?? undefined,
+    repoUrl: trial.repoUrl ?? undefined,
+  });
+
+  await prisma.normalizedIdea.upsert({
+    where: { trialId: ctx.trialId },
+    create: { trialId: ctx.trialId, sourceHash: hash, ...idea },
+    update: { sourceHash: hash, ...idea },
+  });
+
+  return idea;
+}
+
+async function stageGatherAndClassify(ctx: RunContext, idea: NormalizedIdea) {
+  const emit = makeEmitter(ctx);
+
+  await setStage(ctx, TrialStatus.GATHERING);
+  const raw = (await gatherAll(idea, emit)).slice(
+    0,
+    TRIAL_CAPS.maxEvidenceItemsPerTrial,
+  );
+
+  await setStage(ctx, TrialStatus.CLASSIFYING);
+  const { items } = await classifyEvidence(idea, raw, emit);
+
+  // Deterministic upsert by (trialId, fingerprint): re-delivery and deep
+  // scans never duplicate rows, and human pin/reject states survive.
+  for (const item of items) {
+    await prisma.evidence.upsert({
+      where: {
+        trialId_fingerprint: {
+          trialId: ctx.trialId,
+          fingerprint: fingerprint(item.source, item.url),
+        },
+      },
+      create: {
+        trialId: ctx.trialId,
+        source: item.source,
+        url: item.url,
+        title: item.title,
+        snippet: item.snippet,
+        dimension: item.dimension as Dimension,
+        strength: item.strength,
+        fingerprint: fingerprint(item.source, item.url),
+      },
+      update: {
+        snippet: item.snippet,
+        strength: item.strength,
+      },
+    });
+  }
+}
+
+async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
+  await setStage(ctx, TrialStatus.SCORING);
+
+  const trial = await prisma.trial.findUnique({
+    where: { id: ctx.trialId },
+    select: { weights: true },
+  });
+  const weights = validateWeights(trial?.weights)
+    ? (trial?.weights as DimensionScores)
+    : DEFAULT_WEIGHTS;
+
+  const allEvidence = await prisma.evidence.findMany({
+    where: { trialId: ctx.trialId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const scores = {} as DimensionScores;
+
+  for (const dimension of DIMENSIONS) {
+    const dimensionEvidence: ScorableEvidence[] = allEvidence
+      .filter((row) => row.dimension === dimension)
+      .map((row) => ({
+        id: row.id,
+        humanState: row.humanState,
+        source: row.source,
+        url: row.url,
+        title: row.title,
+        snippet: row.snippet,
+        dimension: row.dimension,
+        strength: row.strength,
+      }));
+
+    const knowledge = await retrieveKnowledge(
+      `${idea.category} ${idea.keywords.join(" ")}`,
+      [dimension],
+      4,
+    ).catch(() => []);
+
+    const result = await scoreDimension(idea, dimension, dimensionEvidence, knowledge);
+    scores[dimension] = result.score;
+
+    await prisma.dimensionScore.upsert({
+      where: { trialId_dimension: { trialId: ctx.trialId, dimension } },
+      create: {
+        trialId: ctx.trialId,
+        dimension,
+        score: result.score,
+        rationale: result.rationale,
+        evidenceIds: result.evidenceIds,
+      },
+      update: {
+        score: result.score,
+        rationale: result.rationale,
+        evidenceIds: result.evidenceIds,
+      },
+    });
+  }
+
+  const composed = composeVerdict(scores, weights);
+
+  if (await isSuperseded(ctx)) {
+    await markSuperseded(ctx);
+    return null;
+  }
+
+  await prisma.trial.update({
+    where: { id: ctx.trialId },
+    data: {
+      status: TrialStatus.COMPLETE,
+      compositeScore: composed.compositeScore,
+      verdict: composed.verdict,
+      pivotDirection: composed.pivotDirection,
+      nextStep: composed.nextStep as unknown as Prisma.InputJsonObject,
+      completedRevision: ctx.revision,
+      completedAt: new Date(),
+    },
+  });
+  await prisma.pipelineRun.update({
+    where: { id: ctx.runId },
+    data: { status: PipelineRunStatus.COMPLETE, completedAt: new Date() },
+  });
+  await emitEvent({
+    trialId: ctx.trialId,
+    pipelineRunId: ctx.runId,
+    actor: Actor.SYSTEM,
+    kind: "trial_completed",
+    dedupeKey: `${ctx.runId}:trial_completed`,
+    payload: {
+      revision: ctx.revision,
+      compositeScore: composed.compositeScore,
+      verdict: composed.verdict,
+    },
+  });
+
+  return composed;
+}
+
+// Real five-stage pipeline. FULL runs everything; RESCORE reuses stored
+// evidence (human pins, rejections, and weight changes re-enter here);
+// DEEP_SCAN re-gathers (cache-cheap) before rescoring. The claim contract
+// and dedupe-keyed events make at-least-once delivery safe end to end.
+export async function runPipeline(pipelineRunId: string) {
   const run = await prisma.pipelineRun.findUnique({
     where: { id: pipelineRunId },
     select: {
       id: true,
       revision: true,
+      kind: true,
       status: true,
       trialId: true,
+      trial: { select: { ideaText: true, repoUrl: true } },
     },
   });
 
-  // Unknown or already-terminal deliveries exit safely.
   if (!run || run.status !== PipelineRunStatus.RUNNING) {
     return;
   }
 
+  const ctx: RunContext = {
+    runId: run.id,
+    revision: run.revision,
+    kind: run.kind,
+    trialId: run.trialId,
+  };
+
+  if (await isSuperseded(ctx)) {
+    await markSuperseded(ctx);
+    return;
+  }
+
   try {
-    await prisma.trial.update({
-      where: { id: run.trialId },
-      data: { status: TrialStatus.NORMALIZING },
-    });
-    await emitEvent({
-      trialId: run.trialId,
-      pipelineRunId: run.id,
-      actor: Actor.SYSTEM,
-      kind: "stage_started",
-      dedupeKey: `${run.id}:stage:NORMALIZING`,
-      payload: { stage: "NORMALIZING", revision: run.revision },
-    });
+    const idea = await stageNormalize(ctx, run.trial);
 
-    await sleep(stageDelayMs);
+    if (run.kind !== PipelineRunKind.RESCORE) {
+      await stageGatherAndClassify(ctx, idea);
+    }
 
-    await prisma.trial.update({
-      where: { id: run.trialId },
-      data: {
-        status: TrialStatus.COMPLETE,
-        compositeScore: 50,
-        completedRevision: run.revision,
-        completedAt: new Date(),
-      },
-    });
-    await prisma.pipelineRun.update({
-      where: { id: run.id },
-      data: {
-        status: PipelineRunStatus.COMPLETE,
-        completedAt: new Date(),
-      },
-    });
-    await emitEvent({
-      trialId: run.trialId,
-      pipelineRunId: run.id,
-      actor: Actor.SYSTEM,
-      kind: "trial_completed",
-      dedupeKey: `${run.id}:trial_completed`,
-      payload: { revision: run.revision, compositeScore: 50 },
-    });
+    await stageScoreAndCompose(ctx, idea);
   } catch (error) {
     await prisma.pipelineRun.update({
       where: { id: run.id },
-      data: { status: PipelineRunStatus.FAILED, completedAt: new Date() },
+      data: {
+        status: PipelineRunStatus.FAILED,
+        completedAt: new Date(),
+        errorCode: error instanceof Error ? error.message.slice(0, 120) : "unknown",
+      },
     });
     await prisma.trial.update({
       where: { id: run.trialId },
@@ -95,7 +326,6 @@ export async function runPipeline(
 }
 
 // Conditional claim: only a QUEUED run transitions to RUNNING, exactly once.
-// Duplicate pg-boss deliveries find zero rows to claim and exit safely.
 export async function claimRun(pipelineRunId: string) {
   const claimed = await prisma.pipelineRun.updateMany({
     where: { id: pipelineRunId, status: PipelineRunStatus.QUEUED },

@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   cookies: vi.fn(),
   startTrial: vi.fn(),
+  checkRateLimit: vi.fn(),
+  isValidJudgeCookie: vi.fn(),
 }));
 
 vi.mock("next/headers", () => ({
@@ -12,6 +14,16 @@ vi.mock("next/headers", () => ({
 vi.mock("@/lib/trials/start", () => ({
   startTrial: mocks.startTrial,
 }));
+
+vi.mock("@/lib/ratelimit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ratelimit")>();
+  return { ...actual, checkRateLimit: mocks.checkRateLimit };
+});
+
+vi.mock("@/lib/judge", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/judge")>();
+  return { ...actual, isValidJudgeCookie: mocks.isValidJudgeCookie };
+});
 
 import { POST } from "@/app/api/trials/route";
 
@@ -29,6 +41,8 @@ describe("POST /api/trials", () => {
   afterEach(() => {
     mocks.cookies.mockReset();
     mocks.startTrial.mockReset();
+    mocks.checkRateLimit.mockReset();
+    mocks.isValidJudgeCookie.mockReset();
 
     if (originalPublicTrialsEnabled === undefined) {
       delete process.env.PUBLIC_TRIALS_ENABLED;
@@ -87,10 +101,35 @@ describe("POST /api/trials", () => {
     expect(mocks.startTrial).not.toHaveBeenCalled();
   });
 
+  it("rate limits anonymous creation and lets the judge cookie bypass only that", async () => {
+    process.env.PUBLIC_TRIALS_ENABLED = "true";
+    mocks.cookies.mockResolvedValue({ get: vi.fn(), set: vi.fn() });
+    mocks.isValidJudgeCookie.mockReturnValue(false);
+    mocks.checkRateLimit.mockResolvedValue({ allowed: false, count: 6 });
+
+    const limited = await POST(trialRequest({ ideaText: "an idea" }));
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toMatchObject({ error: "rate_limited" });
+    expect(mocks.startTrial).not.toHaveBeenCalled();
+
+    mocks.isValidJudgeCookie.mockReturnValue(true);
+    mocks.startTrial.mockResolvedValue({
+      run_id: "t1",
+      status: "QUEUED",
+      dashboard_url: "/trial/t1",
+    });
+
+    const judged = await POST(trialRequest({ ideaText: "an idea" }));
+    expect(judged.status).toBe(202);
+    expect(mocks.checkRateLimit).toHaveBeenCalledTimes(1);
+  });
+
   it("starts a queued trial through the shared service when the launch gate is open", async () => {
     process.env.PUBLIC_TRIALS_ENABLED = "true";
     const cookieStore = { get: vi.fn(), set: vi.fn() };
     mocks.cookies.mockResolvedValue(cookieStore);
+    mocks.isValidJudgeCookie.mockReturnValue(false);
+    mocks.checkRateLimit.mockResolvedValue({ allowed: true, count: 1 });
     mocks.startTrial.mockResolvedValue({
       run_id: "trial_123",
       status: "QUEUED",
