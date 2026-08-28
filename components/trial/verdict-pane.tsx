@@ -5,6 +5,7 @@ import { ChevronDown, Scale } from "lucide-react";
 import { motion } from "motion/react";
 
 import { LiveVerdictPanel, scoreToneClass } from "@/components/landing/live-verdict-panel";
+import { WeightsPanel } from "@/components/trial/weights-panel";
 import type { LiveTrialState } from "@/lib/hooks/use-trial-live";
 import { cn, safeHttpUrl } from "@/lib/utils";
 
@@ -28,9 +29,11 @@ export function explainErrorCode(code: string | null): string {
 export function VerdictPane({
   live,
   onFileAnother,
+  runId = null,
 }: {
   live: LiveTrialState;
   onFileAnother: () => void;
+  runId?: string | null;
 }) {
   const [openDimension, setOpenDimension] = useState<string | null>(null);
   const evidenceById = new Map(live.evidence.map((item) => [item.id, item]));
@@ -172,6 +175,10 @@ export function VerdictPane({
             );
           })}
         </div>
+      ) : null}
+
+      {runId && live.weights ? (
+        <WeightsPanel runId={runId} weights={live.weights} />
       ) : null}
 
       <button

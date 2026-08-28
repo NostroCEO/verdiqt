@@ -67,7 +67,14 @@ export function getModelContext(): ModelContext | null {
   }
 
   const doc = document as Document & { modelContext?: ModelContext };
-  return doc.modelContext ?? null;
+  if (doc.modelContext) {
+    return doc.modelContext;
+  }
+
+  // Some WebMCP clients (notably in-app browsers) expose the surface on
+  // navigator instead of document; document stays primary per the spec.
+  const nav = navigator as Navigator & { modelContext?: ModelContext };
+  return nav.modelContext ?? null;
 }
 
 function isErrorResult(value: unknown) {

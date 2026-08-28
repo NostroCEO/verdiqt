@@ -24,6 +24,7 @@ import { Check } from "lucide-react";
 
 import { ArchiveRail } from "@/components/trial/archive-rail";
 import { GavelStrike } from "@/components/trial/gavel-strike";
+import { ApprovalCard } from "@/components/trial/approval-card";
 import { ResearchPane } from "@/components/trial/research-pane";
 import { VerdictPane } from "@/components/trial/verdict-pane";
 import { phaseIndexFor, phaseStates } from "@/lib/trial-progress";
@@ -434,6 +435,7 @@ export function TrialDashboard({
               </div>
 
               {isLive ? (
+                <>
                 <AnimatePresence initial={false} mode="wait">
                   <motion.div
                     key={displayedView}
@@ -479,12 +481,29 @@ export function TrialDashboard({
                         status={live.status}
                         evidence={live.evidence}
                         sourceStates={live.sourceStates}
+                        runId={runId}
                       />
                     ) : (
-                      <VerdictPane live={live} onFileAnother={returnToIntake} />
+                      <VerdictPane
+                        live={live}
+                        onFileAnother={returnToIntake}
+                        runId={runId}
+                      />
                     )}
                   </motion.div>
                 </AnimatePresence>
+
+                {live.pendingApprovals.map((approval) =>
+                  runId ? (
+                    <ApprovalCard
+                      key={approval.approvalId}
+                      runId={runId}
+                      approvalId={approval.approvalId}
+                      dimension={approval.dimension}
+                    />
+                  ) : null,
+                )}
+                </>
               ) : (
                 <div className="mt-3 grid gap-px bg-border sm:grid-cols-2">
                   <div className="min-h-28 bg-background p-3">

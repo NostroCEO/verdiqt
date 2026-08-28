@@ -48,6 +48,12 @@ export type LiveTrialState = {
     category: string;
     keywords: string[];
   } | null;
+  pendingApprovals: Array<{
+    approvalId: string;
+    kind: string;
+    dimension: string | null;
+  }>;
+  weights: Record<string, number> | null;
   lastEventKind: string | null;
   connected: boolean;
   workerSeen: boolean;
@@ -68,6 +74,8 @@ const initialState: LiveTrialState = {
   benchConfidence: null,
   sourceStates: {},
   caseFile: null,
+  pendingApprovals: [],
+  weights: null,
   lastEventKind: null,
   connected: false,
   workerSeen: false,
@@ -124,6 +132,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             evidence_ids: string[];
           }>;
           pivot_direction: string | null;
+          weights?: Record<string, number> | null;
           next_step: {
             action?: string;
             bench_opinion?: string;
@@ -143,6 +152,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           nextStepAction: body.next_step?.action ?? null,
           benchOpinion: body.next_step?.bench_opinion ?? null,
           benchConfidence: body.next_step?.bench_confidence ?? null,
+          weights: body.weights ?? null,
         }));
       } catch {
         verdictFetched = false;
@@ -216,6 +226,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             category: string;
             keywords: string[];
           } | null;
+          pending_approvals?: Array<{
+            approval_id: string;
+            kind: string;
+            dimension: string | null;
+          }>;
         };
 
         statusRef.current = body.status;
@@ -236,6 +251,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
                 keywords: body.case_file.keywords,
               }
             : current.caseFile,
+          pendingApprovals: (body.pending_approvals ?? []).map((entry) => ({
+            approvalId: entry.approval_id,
+            kind: entry.kind,
+            dimension: entry.dimension,
+          })),
           connected: true,
           workerSeen: hasWorkerProgress({
             status: body.status,
@@ -254,6 +274,12 @@ export function useTrialLive(runId: string | null): LiveTrialState {
         if (isTerminalStatus(body.status)) {
           terminal = true;
           source?.close();
+        } else if (terminal) {
+          // A human or agent action (pin, reject, weights, approval) opened
+          // a fresh revision after the verdict: follow it and refetch the
+          // verdict details when the new run completes.
+          terminal = false;
+          verdictFetched = false;
         }
       } catch {
         if (!cancelled) {
@@ -262,8 +288,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
       }
     }
 
+    // The status poll NEVER stops while the dashboard is open: a completed
+    // trial can re-enter the pipeline at any moment (rescore, deep scan),
+    // and the 2s server micro-cache keeps the idle cost negligible.
     const statusTimer = setInterval(() => {
-      if (!terminal && document.visibilityState !== "hidden") {
+      if (document.visibilityState !== "hidden") {
         void refetchStatus();
       }
     }, STATUS_POLL_MS);

@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { Globe } from "lucide-react";
+import { Ban, Globe, Pin } from "lucide-react";
 
 import {
   GitHubMark,
@@ -44,13 +44,31 @@ export function ResearchPane({
   status,
   evidence,
   sourceStates = {},
+  runId = null,
 }: {
   status: TrialStatusValue;
   evidence: LiveEvidenceItem[];
   sourceStates?: Record<string, { state: string; count: number }>;
+  runId?: string | null;
 }) {
   const researching =
     status === "NORMALIZING" || status === "GATHERING" || status === "CLASSIFYING";
+
+  // The human judges: pin marks relevance, reject removes an item from
+  // scoring, both open a RESCORE revision server-side. The poll loop picks
+  // up the new run; no local state to reconcile.
+  function setHumanState(evidenceId: string, humanState: string) {
+    if (!runId) return;
+    void fetch(
+      `/api/trials/${encodeURIComponent(runId)}/evidence/${encodeURIComponent(evidenceId)}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ humanState }),
+      },
+    ).catch(() => {});
+  }
 
   return (
     <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
@@ -152,7 +170,10 @@ export function ResearchPane({
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ type: "spring", visualDuration: 0.3, bounce: 0.2 }}
-                  className="border-b border-border/60 px-3 py-2 transition-colors last:border-b-0 hover:bg-surface"
+                  className={cn(
+                    "border-b border-border/60 px-3 py-2 transition-colors last:border-b-0 hover:bg-surface",
+                    item.humanState === "REJECTED" && "opacity-45",
+                  )}
                 >
                   <div className="flex items-center gap-2">
                     <span className="inline-flex shrink-0 items-center gap-1 border border-border px-1.5 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-primary">
@@ -193,6 +214,48 @@ export function ResearchPane({
                         />
                       ))}
                     </span>
+                    {runId ? (
+                      <span className="ml-auto inline-flex gap-1">
+                        <button
+                          type="button"
+                          title={item.humanState === "PINNED" ? "Unpin" : "Pin as relevant"}
+                          aria-pressed={item.humanState === "PINNED"}
+                          onClick={() =>
+                            setHumanState(
+                              item.id,
+                              item.humanState === "PINNED" ? "NEUTRAL" : "PINNED",
+                            )
+                          }
+                          className={cn(
+                            "inline-flex size-5 items-center justify-center border transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                            item.humanState === "PINNED"
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border text-muted-foreground hover:border-primary hover:text-primary",
+                          )}
+                        >
+                          <Pin className="size-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          title={item.humanState === "REJECTED" ? "Restore" : "Reject from scoring"}
+                          aria-pressed={item.humanState === "REJECTED"}
+                          onClick={() =>
+                            setHumanState(
+                              item.id,
+                              item.humanState === "REJECTED" ? "NEUTRAL" : "REJECTED",
+                            )
+                          }
+                          className={cn(
+                            "inline-flex size-5 items-center justify-center border transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                            item.humanState === "REJECTED"
+                              ? "border-kill bg-kill/15 text-kill"
+                              : "border-border text-muted-foreground hover:border-kill hover:text-kill",
+                          )}
+                        >
+                          <Ban className="size-2.5" />
+                        </button>
+                      </span>
+                    ) : null}
                   </div>
                 </motion.li>
               ))}
