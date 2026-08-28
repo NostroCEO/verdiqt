@@ -181,6 +181,7 @@ model DimensionScore {
   dimension   Dimension
   score       Int
   rationale   String
+  keyFinding  String?
   evidenceIds String[]
 
   @@unique([trialId, dimension])

@@ -48,6 +48,7 @@ export async function GET(
       dimension: score.dimension,
       score: score.score,
       rationale: score.rationale,
+      key_finding: score.keyFinding,
       evidence_ids: score.evidenceIds,
     })),
     next_step: trial.nextStep,

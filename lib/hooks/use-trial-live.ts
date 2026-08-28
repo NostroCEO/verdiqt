@@ -14,6 +14,7 @@ export type LiveDimensionScore = {
   dimension: string;
   score: number;
   rationale: string;
+  keyFinding: string | null;
   evidenceIds: string[];
 };
 
@@ -119,6 +120,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             dimension: string;
             score: number;
             rationale: string;
+            key_finding?: string | null;
             evidence_ids: string[];
           }>;
           pivot_direction: string | null;
@@ -134,6 +136,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             dimension: entry.dimension,
             score: entry.score,
             rationale: entry.rationale,
+            keyFinding: entry.key_finding ?? null,
             evidenceIds: entry.evidence_ids,
           })),
           pivotDirection: body.pivot_direction,

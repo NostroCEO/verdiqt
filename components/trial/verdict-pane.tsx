@@ -102,8 +102,15 @@ export function VerdictPane({
                   onClick={() => setOpenDimension(open ? null : dimension.dimension)}
                   className="flex min-h-10 w-full items-center gap-3 px-3 text-left transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  <span className="flex-1 text-xs font-medium">
-                    {dimension.dimension.replaceAll("_", " ")}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-medium">
+                      {dimension.dimension.replaceAll("_", " ")}
+                    </span>
+                    {dimension.keyFinding ? (
+                      <span className="block truncate text-[0.68rem] text-primary">
+                        {dimension.keyFinding}
+                      </span>
+                    ) : null}
                   </span>
                   <span className={cn("font-mono text-xs", scoreToneClass(dimension.score))}>
                     {dimension.score}
@@ -121,6 +128,11 @@ export function VerdictPane({
                     animate={{ opacity: 1 }}
                     className="border-t border-border/60 bg-surface px-3 py-3"
                   >
+                    {dimension.keyFinding ? (
+                      <p className="mb-2 border-l-2 border-primary bg-primary/10 px-2 py-1.5 text-xs font-medium text-foreground">
+                        {dimension.keyFinding}
+                      </p>
+                    ) : null}
                     <p className="text-xs leading-5 text-foreground/80">
                       {dimension.rationale}
                     </p>

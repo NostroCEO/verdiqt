@@ -249,11 +249,13 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
         dimension,
         score: result.score,
         rationale: result.rationale,
+        keyFinding: result.keyFinding,
         evidenceIds: result.evidenceIds,
       },
       update: {
         score: result.score,
         rationale: result.rationale,
+        keyFinding: result.keyFinding,
         evidenceIds: result.evidenceIds,
       },
     });
