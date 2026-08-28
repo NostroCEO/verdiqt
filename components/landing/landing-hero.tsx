@@ -7,7 +7,11 @@ import { ArrowRight, Check, FolderGit2, Lightbulb } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { caseNameFrom, isGitHubRepository, type IntakeMode } from "@/lib/intake";
+import {
+  isGitHubRepository,
+  startTrialRequest,
+  type IntakeMode,
+} from "@/lib/intake";
 import { cn } from "@/lib/utils";
 
 const modes: Array<{
@@ -86,7 +90,7 @@ export function LandingHero() {
     setFeedback("");
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = value.trim();
 
@@ -94,8 +98,8 @@ export function LandingHero() {
       setHasError(true);
       setFeedback(
         mode === "repo"
-          ? "PASTE A PUBLIC GITHUB REPOSITORY TO OPEN THE PREVIEW."
-          : "STATE THE IDEA TO OPEN THE PREVIEW.",
+          ? "PASTE A PUBLIC GITHUB REPOSITORY TO OPEN THE CASE."
+          : "STATE THE IDEA TO OPEN THE CASE.",
       );
       return;
     }
@@ -106,16 +110,25 @@ export function LandingHero() {
       return;
     }
 
-    const caseName = caseNameFrom(mode, trimmed);
-
     setHasError(false);
-    setFeedback("CASE " + caseName.toUpperCase() + " OPENED. ENTERING THE COURTROOM.");
+    setFeedback("OPENING THE CASE...");
 
-    const params = new URLSearchParams({
-      case: caseName,
-      source: trimmed,
-      type: mode,
-    });
+    const submission = await startTrialRequest(mode, trimmed);
+
+    if (submission.outcome === "limited" || submission.outcome === "error") {
+      setHasError(true);
+      setFeedback(submission.message);
+      return;
+    }
+
+    setFeedback(
+      "CASE " + submission.caseName.toUpperCase() + " OPENED. ENTERING THE COURTROOM.",
+    );
+
+    const params =
+      submission.outcome === "live"
+        ? new URLSearchParams({ run: submission.runId })
+        : new URLSearchParams({ case: submission.caseName, source: trimmed, type: mode });
     router.push("/trial?" + params.toString());
   }
 

@@ -32,3 +32,48 @@ export function caseNameFrom(mode: IntakeMode, value: string) {
     ? getRepoName(value)
     : value.split(/\s+/).slice(0, 4).join(" ");
 }
+
+export type IntakeSubmission =
+  | { outcome: "live"; runId: string; caseName: string }
+  | { outcome: "local"; caseName: string }
+  | { outcome: "limited"; message: string }
+  | { outcome: "error"; message: string };
+
+// Both intakes share this: try the real trial API; while the launch gate is
+// closed the page falls back to the honest local preview. 202 is the only
+// response that claims a trial exists.
+export async function startTrialRequest(
+  mode: IntakeMode,
+  value: string,
+): Promise<IntakeSubmission> {
+  const caseName = caseNameFrom(mode, value);
+
+  try {
+    const response = await fetch("/api/trials", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(mode === "repo" ? { repoUrl: value } : { ideaText: value }),
+    });
+
+    if (response.status === 202) {
+      const body = (await response.json()) as { run_id: string };
+      return { outcome: "live", runId: body.run_id, caseName };
+    }
+
+    if (response.status === 429) {
+      return {
+        outcome: "limited",
+        message: "DAILY TRIAL LIMIT REACHED. JUDGES CAN UNLOCK AT /JUDGE.",
+      };
+    }
+
+    if (response.status === 503) {
+      return { outcome: "local", caseName };
+    }
+
+    return { outcome: "error", message: "THE COURT COULD NOT ACCEPT THIS CASE." };
+  } catch {
+    return { outcome: "local", caseName };
+  }
+}

@@ -6,7 +6,11 @@ import { ArrowRight, FolderGit2, Lightbulb } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { caseNameFrom, isGitHubRepository, type IntakeMode } from "@/lib/intake";
+import {
+  isGitHubRepository,
+  startTrialRequest,
+  type IntakeMode,
+} from "@/lib/intake";
 import { cn } from "@/lib/utils";
 
 const modes: Array<{ id: IntakeMode; label: string; placeholder: string }> = [
@@ -34,7 +38,7 @@ export function CourtroomIntake() {
 
   const activeMode = modes.find((item) => item.id === mode) ?? modes[0];
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = value.trim();
 
@@ -54,17 +58,48 @@ export function CourtroomIntake() {
       return;
     }
 
-    const caseName = caseNameFrom(mode, trimmed);
     setHasError(false);
-    setFeedback("CASE " + caseName.toUpperCase() + " LOADED INTO PHASE 1 BELOW.");
+    setFeedback("FILING THE CASE...");
 
+    const submission = await startTrialRequest(mode, trimmed);
+
+    if (submission.outcome === "limited" || submission.outcome === "error") {
+      setHasError(true);
+      setFeedback(submission.message);
+      return;
+    }
+
+    if (submission.outcome === "live") {
+      setFeedback(
+        "CASE " + submission.caseName.toUpperCase() + " FILED. THE COURT IS IN SESSION.",
+      );
+      window.dispatchEvent(
+        new CustomEvent("verdiqt:trial-started", {
+          detail: {
+            runId: submission.runId,
+            caseName: submission.caseName,
+            source: trimmed,
+            inputType: mode,
+          },
+        }),
+      );
+      router.replace("/trial?run=" + encodeURIComponent(submission.runId));
+      return;
+    }
+
+    setFeedback(
+      "CASE " + submission.caseName.toUpperCase() + " LOADED INTO PHASE 1 BELOW.",
+    );
     window.dispatchEvent(
       new CustomEvent("verdiqt:preview-start", {
-        detail: { caseName, source: trimmed, inputType: mode },
+        detail: { caseName: submission.caseName, source: trimmed, inputType: mode },
       }),
     );
-
-    const params = new URLSearchParams({ case: caseName, source: trimmed, type: mode });
+    const params = new URLSearchParams({
+      case: submission.caseName,
+      source: trimmed,
+      type: mode,
+    });
     router.replace("/trial?" + params.toString());
   }
 

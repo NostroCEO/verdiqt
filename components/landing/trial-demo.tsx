@@ -17,6 +17,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { useSyncExternalStore } from "react";
+import { useTrialLive } from "@/lib/hooks/use-trial-live";
 import {
   getAgentChannelSnapshot,
   getAgentChannelServerSnapshot,
@@ -132,10 +133,23 @@ function MetricCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+type TrialStartedDetail = PreviewStartDetail & { runId?: string };
+
+// Maps persisted trial status to the active phase indicator (0-based).
+function phaseIndexFor(status: string | null): number {
+  if (status === "GATHERING" || status === "CLASSIFYING" || status === "SCORING") {
+    return 1;
+  }
+  if (status === "COMPLETE") return 2;
+  return 0;
+}
+
 export function TrialDashboard({
   initialIntake,
+  initialRunId,
 }: {
   initialIntake?: PreviewStartDetail;
+  initialRunId?: string;
 } = {}) {
   const [intake, setIntake] = useState<DashboardIntake>(() =>
     initialIntake && (initialIntake.caseName || initialIntake.source)
@@ -154,21 +168,37 @@ export function TrialDashboard({
         },
   );
 
-  useEffect(() => {
-    function handlePreviewStart(event: Event) {
-      const detail = (event as CustomEvent<PreviewStartDetail>).detail ?? {};
+  const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
+  const live = useTrialLive(runId);
 
+  useEffect(() => {
+    function applyDetail(detail: TrialStartedDetail) {
       setIntake({
         caseLabel: cleanLabel(detail.caseName, "Untitled case", 64),
         sourceLabel: cleanLabel(detail.source, "No input supplied", 120),
         inputType: detail.inputType ?? inferInputType(detail.source),
         hasInput: true,
       });
+      if (detail.runId) {
+        setRunId(detail.runId);
+      }
+    }
+
+    function handlePreviewStart(event: Event) {
+      applyDetail((event as CustomEvent<TrialStartedDetail>).detail ?? {});
     }
 
     window.addEventListener("verdiqt:preview-start", handlePreviewStart);
-    return () => window.removeEventListener("verdiqt:preview-start", handlePreviewStart);
+    window.addEventListener("verdiqt:trial-started", handlePreviewStart);
+    return () => {
+      window.removeEventListener("verdiqt:preview-start", handlePreviewStart);
+      window.removeEventListener("verdiqt:trial-started", handlePreviewStart);
+    };
   }, []);
+
+  const isLive = runId !== null;
+  const activePhase = isLive ? phaseIndexFor(live.status) : 0;
+  const failed = live.status === "FAILED";
 
   function returnToIntake() {
     const input = document.getElementById("trial-input");
@@ -208,18 +238,31 @@ export function TrialDashboard({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="border border-primary/40 bg-primary/10 px-2 py-1 font-mono text-[0.48rem] uppercase tracking-[0.07em] text-primary">
-                Phase 01 active
+              <span
+                className={cn(
+                  "border px-2 py-1 font-mono text-[0.48rem] uppercase tracking-[0.07em]",
+                  failed
+                    ? "border-kill/50 bg-kill/10 text-kill"
+                    : "border-primary/40 bg-primary/10 text-primary",
+                )}
+              >
+                {failed ? "Trial failed" : `Phase 0${activePhase + 1} active`}
               </span>
               <span className="hidden border border-border px-2 py-1 font-mono text-[0.48rem] uppercase tracking-[0.07em] text-muted-foreground sm:inline-flex">
-                No backend run
+                {isLive
+                  ? live.status === "COMPLETE"
+                    ? "Run complete"
+                    : live.workerSeen
+                      ? "Worker running"
+                      : "Run queued"
+                  : "No backend run"}
               </span>
             </div>
           </header>
 
           <nav aria-label="Trial phases" className="grid h-11 grid-cols-3 gap-px bg-border">
             {phases.map((phase, index) => {
-              const active = index === 0;
+              const active = index === activePhase;
 
               return (
                 <button
@@ -270,14 +313,25 @@ export function TrialDashboard({
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-mono text-[0.52rem] uppercase tracking-[0.1em] text-primary">
-                    Phase 01 / Trial intake
+                    {isLive
+                      ? `Phase 0${activePhase + 1} / ${phases[activePhase].label}`
+                      : "Phase 01 / Trial intake"}
                   </p>
                   <h2 className="mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">
-                    {intake.hasInput ? "Input loaded. Ready for trial creation." : "Waiting for a case."}
+                    {failed
+                      ? "The trial failed. File the case again."
+                      : isLive
+                        ? live.status === "COMPLETE"
+                          ? "The verdict is in."
+                          : "The court is in session."
+                        : intake.hasInput
+                          ? "Input loaded. Ready for trial creation."
+                          : "Waiting for a case."}
                   </h2>
                   <p className="mt-2 max-w-xl text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
-                    Phase 1 remains selected until the real trial API accepts this input.
-                    Research and verdict cannot be opened early.
+                    {isLive
+                      ? "Only persisted pipeline state advances these phases; every value below is read from the live trial."
+                      : "Phase 1 remains selected until the real trial API accepts this input. Research and verdict cannot be opened early."}
                   </p>
                 </div>
                 <button
@@ -324,9 +378,12 @@ export function TrialDashboard({
               </div>
 
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <MetricCard label="Evidence" value="0" />
-                <MetricCard label="Score" value="--" />
-                <MetricCard label="Verdict" value="--" />
+                <MetricCard label="Evidence" value={String(live.evidenceCount)} />
+                <MetricCard
+                  label="Score"
+                  value={live.compositeScore !== null ? String(live.compositeScore) : "--"}
+                />
+                <MetricCard label="Verdict" value={live.verdict ?? "--"} />
               </div>
 
               <div className="mt-3 grid gap-px bg-border sm:grid-cols-2">
@@ -334,28 +391,47 @@ export function TrialDashboard({
                   <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
                     Evidence feed
                   </p>
-                  <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                    <LockKeyhole className="size-3.5" />
-                    Locked until Phase 2 begins.
-                  </div>
+                  {activePhase >= 1 ? (
+                    <p className="mt-4 text-xs text-foreground">
+                      {live.evidenceCount} items gathered from public sources.
+                    </p>
+                  ) : (
+                    <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                      <LockKeyhole className="size-3.5" />
+                      Locked until Phase 2 begins.
+                    </div>
+                  )}
                 </div>
                 <div className="min-h-28 bg-background p-3">
                   <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
                     Gauge and radar
                   </p>
-                  <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
-                    <LockKeyhole className="size-3.5" />
-                    Locked until a real verdict exists.
-                  </div>
+                  {live.status === "COMPLETE" && live.verdict ? (
+                    <p className="mt-4 text-xs text-foreground">
+                      {live.verdict} at {live.compositeScore}. Full charts arrive with the
+                      verdict experience.
+                    </p>
+                  ) : (
+                    <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                      <LockKeyhole className="size-3.5" />
+                      Locked until a real verdict exists.
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="mt-3 flex items-center gap-2 border border-border bg-background px-3 py-2 font-mono text-[0.52rem] text-muted-foreground">
                 <Terminal className="size-3 text-primary" />
                 <span className="truncate text-foreground">
-                  {intake.hasInput ? "$ input loaded into phase 01" : "$ waiting for github input"}
+                  {isLive
+                    ? `$ ${live.lastEventKind ?? "run accepted"}`
+                    : intake.hasInput
+                      ? "$ input loaded into phase 01"
+                      : "$ waiting for github input"}
                 </span>
-                <span className="ml-auto hidden shrink-0 sm:inline">pipeline: idle</span>
+                <span className="ml-auto hidden shrink-0 sm:inline">
+                  {isLive ? `pipeline: ${(live.status ?? "queued").toLowerCase()}` : "pipeline: idle"}
+                </span>
               </div>
             </main>
 
@@ -373,9 +449,24 @@ export function TrialDashboard({
                   value={intake.hasInput ? "Ready" : "Waiting"}
                   active
                 />
-                <SystemRow icon={Server} label="Trial API" value="Not connected" />
-                <SystemRow icon={Database} label="Postgres" value="Not connected" />
-                <SystemRow icon={Activity} label="Worker" value="Not connected" />
+                <SystemRow
+                  icon={Server}
+                  label="Trial API"
+                  value={live.connected ? "Connected" : "Not connected"}
+                  active={live.connected}
+                />
+                <SystemRow
+                  icon={Database}
+                  label="Postgres"
+                  value={live.connected ? "Connected" : "Not connected"}
+                  active={live.connected}
+                />
+                <SystemRow
+                  icon={Activity}
+                  label="Worker"
+                  value={live.workerSeen ? "Running" : "Not connected"}
+                  active={live.workerSeen}
+                />
               </ul>
               <AgentChannelPanel />
             </aside>
