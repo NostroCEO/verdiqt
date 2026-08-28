@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 
 import { ArchiveRail } from "@/components/trial/archive-rail";
+import { GavelStrike } from "@/components/trial/gavel-strike";
 import { ResearchPane } from "@/components/trial/research-pane";
 import { VerdictPane } from "@/components/trial/verdict-pane";
 import { phaseIndexFor, phaseStates } from "@/lib/trial-progress";
@@ -345,7 +346,7 @@ export function TrialDashboard({
                       ? `Phase 0${displayedView + 1} / ${phases[displayedView].label}`
                       : "Phase 01 / Trial intake"}
                   </p>
-                  <h2 className="mt-2 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">
+                  <h2 className="mt-2 flex items-center gap-3 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">
                     {failed
                       ? "The trial failed. File the case again."
                       : isLive
@@ -355,6 +356,9 @@ export function TrialDashboard({
                         : intake.hasInput
                           ? "Input loaded. Ready for trial creation."
                           : "Waiting for a case."}
+                    {isLive && live.status === "COMPLETE" && !failed ? (
+                      <GavelStrike key={runId ?? "verdict"} />
+                    ) : null}
                   </h2>
                   <p className="mt-2 max-w-xl text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">
                     {isLive

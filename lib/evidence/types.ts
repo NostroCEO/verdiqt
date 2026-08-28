@@ -20,8 +20,8 @@ export type RawEvidence = {
 // Central event sink so adapters never write TrialEvents themselves; the
 // pipeline owns persistence and dedupe keys.
 export type EvidenceEmitter = (
-  kind: "source_disabled" | "source_failed",
-  payload: { source: string; reason?: string },
+  kind: "source_disabled" | "source_failed" | "source_gathered",
+  payload: { source: string; reason?: string; count?: number },
 ) => void;
 
 export type EvidenceAdapter = {

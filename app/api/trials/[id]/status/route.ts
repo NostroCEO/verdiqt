@@ -31,7 +31,7 @@ function completedStages(status: TrialStatus) {
 // Agent responses are contract-bound (docs/WEBMCP_TOOLS.md): snake_case keys
 // only, and event payloads are projected to known keys so nothing a worker
 // writes later can leak into tool results by default.
-const allowedPayloadKeys = ["revision", "dimension", "source", "stage"] as const;
+const allowedPayloadKeys = ["revision", "dimension", "source", "stage", "count"] as const;
 
 function projectPayload(payload: unknown): Record<string, unknown> {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {

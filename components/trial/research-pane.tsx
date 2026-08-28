@@ -1,18 +1,22 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
+import { Flame, FolderGit2, Globe, MessagesSquare, Rocket, type LucideIcon } from "lucide-react";
 
 import { StageChecklist } from "@/components/trial/stage-checklist";
 import type { LiveEvidenceItem } from "@/lib/hooks/use-trial-live";
 import type { TrialStatusValue } from "@/lib/trial-progress";
 import { cn } from "@/lib/utils";
 
-const SOURCE_LABELS: Record<string, string> = {
-  HACKERNEWS: "Hacker News",
-  GITHUB: "GitHub",
-  PRODUCT_HUNT: "Product Hunt",
-  WEB_SEARCH: "Web search",
-  REDDIT: "Reddit",
+// Platform glyphs (founder UX rule 2026-08-28): recognizable source icons in
+// the research feed. Lucide glyphs, not third-party brand assets, keeping
+// the four-official-marks rule intact.
+const SOURCES: Record<string, { label: string; icon: LucideIcon }> = {
+  HACKERNEWS: { label: "Hacker News", icon: Flame },
+  GITHUB: { label: "GitHub", icon: FolderGit2 },
+  PRODUCT_HUNT: { label: "Product Hunt", icon: Rocket },
+  WEB_SEARCH: { label: "Web search", icon: Globe },
+  REDDIT: { label: "Reddit", icon: MessagesSquare },
 };
 
 function hostOf(url: string) {
@@ -64,8 +68,12 @@ export function ResearchPane({
                   className="border-b border-border/60 px-3 py-2 transition-colors last:border-b-0 hover:bg-surface"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="shrink-0 border border-border px-1.5 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-primary">
-                      {SOURCE_LABELS[item.source] ?? item.source}
+                    <span className="inline-flex shrink-0 items-center gap-1 border border-border px-1.5 py-0.5 font-mono text-[0.5rem] uppercase tracking-[0.08em] text-primary">
+                      {(() => {
+                        const Icon = SOURCES[item.source]?.icon ?? Globe;
+                        return <Icon aria-hidden="true" className="size-2.5" />;
+                      })()}
+                      {SOURCES[item.source]?.label ?? item.source}
                     </span>
                     <a
                       href={item.url}

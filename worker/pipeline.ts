@@ -131,6 +131,16 @@ async function stageGatherAndClassify(ctx: RunContext, idea: NormalizedIdea) {
     TRIAL_CAPS.maxEvidenceItemsPerTrial,
   );
 
+  // Observability: per-source yields become events, so a zero-yield source
+  // is visible in the trial feed instead of silently narrowing coverage.
+  const counts = new Map<string, number>();
+  for (const item of raw) {
+    counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+  }
+  for (const [source, count] of counts) {
+    emit("source_gathered", { source, count });
+  }
+
   await setStage(ctx, TrialStatus.CLASSIFYING);
   const { items } = await classifyEvidence(idea, raw, emit);
 
