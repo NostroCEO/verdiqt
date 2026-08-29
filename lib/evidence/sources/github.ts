@@ -21,7 +21,7 @@ type RepoSearchResponse = { items: RepoSearchItem[] };
 export const githubAdapter: EvidenceAdapter = {
   source: EvidenceSource.GITHUB,
   async gather(idea) {
-    const query = idea.oneLiner;
+    const query = idea.keywords.slice(0, 3).join(" ");
     const cacheKey = `repo-search:${query}`;
 
     const data = await cachedFetch<RepoSearchResponse>(

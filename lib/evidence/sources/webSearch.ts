@@ -31,7 +31,7 @@ function decodeEntities(value: string) {
 export const webSearchAdapter: EvidenceAdapter = {
   source: EvidenceSource.WEB_SEARCH,
   async gather(idea) {
-    const query = [idea.problem, ...idea.keywords.slice(0, 2)]
+    const query = [idea.category, ...idea.keywords.slice(0, 2)]
       .filter(Boolean)
       .join(" ");
     const cacheKey = `stackoverflow:${query}`;

@@ -48,8 +48,8 @@ async function searchHN(query: string, perPage: number): Promise<AlgoliaResponse
 export const hackernewsAdapter: EvidenceAdapter = {
   source: EvidenceSource.HACKERNEWS,
   async gather(idea) {
-    const primaryQuery = idea.oneLiner;
-    const secondaryQuery = [idea.problem, idea.audience].filter(Boolean).join(" ");
+    const primaryQuery = idea.keywords.slice(0, 3).join(" ");
+    const secondaryQuery = [idea.category, ...idea.keywords.slice(3, 5)].filter(Boolean).join(" ");
     const cacheKey = `search:${primaryQuery}|${secondaryQuery}`;
 
     const data = await cachedFetch<AlgoliaResponse>(
