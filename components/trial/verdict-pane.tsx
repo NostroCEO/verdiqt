@@ -223,7 +223,7 @@ export function VerdictPane({
       ) : null}
 
       {runId && live.weights ? (
-        <WeightsPanel runId={runId} weights={live.weights} />
+        <WeightsPanel key={runId} runId={runId} weights={live.weights} />
       ) : null}
 
       <button

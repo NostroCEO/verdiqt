@@ -201,6 +201,18 @@ export function TrialDashboard({
     };
   }, []);
 
+  // The URL is the source of truth for which case is live. Filing a second
+  // case back-to-back replaces ?run= via router.replace; the live subscription
+  // must follow it even if the CustomEvent above is missed or an instance
+  // swaps. Without this, runId stayed pinned to the first case and the second
+  // run showed no evidence (founder bug 2026-08-29).
+  useEffect(() => {
+    if (initialRunId) {
+      setRunId(initialRunId);
+      setChosenView(null);
+    }
+  }, [initialRunId]);
+
   const router = useRouter();
   // null = the view follows the pipeline; a number = the user chose a tab.
   const [chosenView, setChosenView] = useState<number | null>(null);
