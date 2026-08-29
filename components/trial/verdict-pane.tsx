@@ -61,18 +61,41 @@ export function VerdictPane({
   const evidenceById = new Map(live.evidence.map((item) => [item.id, item]));
 
   if (live.status !== "COMPLETE") {
+    const deliberating = live.status === "SCORING";
     return (
       <div className="border border-border bg-background p-6 text-center">
-        <Scale className="mx-auto size-5 text-primary" />
-        <p className="mt-3 text-sm text-foreground">
-          {live.status === "FAILED"
-            ? "The trial failed before a verdict was reached."
-            : "The court is deliberating."}
-        </p>
+        {deliberating ? (
+          <motion.div
+            animate={{ rotate: [0, 8, -8, 0] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+            className="mx-auto w-fit"
+          >
+            <Scale className="size-5 text-primary" />
+          </motion.div>
+        ) : (
+          <Scale className="mx-auto size-5 text-primary" />
+        )}
+        {deliberating ? (
+          <motion.p
+            animate={{ opacity: [1, 0.5, 1] }}
+            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+            className="mt-3 text-sm text-foreground"
+          >
+            The court is deliberating.
+          </motion.p>
+        ) : (
+          <p className="mt-3 text-sm text-foreground">
+            {live.status === "FAILED"
+              ? "The trial failed before a verdict was reached."
+              : "The court is deliberating."}
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">
           {live.status === "FAILED"
             ? explainErrorCode(live.errorCode)
-            : "The verdict unlocks the moment scoring completes."}
+            : deliberating
+              ? "Scoring the six dimensions and consulting the bench."
+              : "The verdict unlocks the moment scoring completes."}
         </p>
       </div>
     );
@@ -206,7 +229,7 @@ export function VerdictPane({
       <button
         type="button"
         onClick={onFileAnother}
-        className="cut-action mt-4 h-10 bg-primary px-5 font-mono text-xs font-medium uppercase tracking-[0.07em] text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring"
+        className="cut-action mt-4 h-10 w-full bg-primary px-5 font-mono text-xs font-medium uppercase tracking-[0.07em] text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
       >
         File another case
       </button>

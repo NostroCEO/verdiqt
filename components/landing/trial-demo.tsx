@@ -13,6 +13,7 @@ import {
   Server,
   Terminal,
   UserRound,
+  Zap,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -134,11 +135,11 @@ function SystemRow({
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-h-20 border border-border bg-background p-3">
-      <p className="font-mono text-[0.5rem] uppercase tracking-[0.08em] text-muted-foreground">
+    <div className="min-h-16 border border-border bg-background p-2 sm:min-h-20 sm:p-3">
+      <p className="font-mono text-[0.44rem] uppercase tracking-[0.08em] text-muted-foreground sm:text-[0.5rem]">
         {label}
       </p>
-      <p className="mt-3 text-xl font-semibold tracking-[-0.04em] text-foreground">{value}</p>
+      <p className="mt-2 text-base font-semibold tracking-[-0.04em] text-foreground sm:mt-3 sm:text-xl">{value}</p>
     </div>
   );
 }
@@ -304,7 +305,7 @@ export function TrialDashboard({
                   disabled={!clickable}
                   onClick={() => (isLive ? setChosenView(index) : undefined)}
                   className={cn(
-                    "relative min-w-0 border-y border-border px-2 font-mono text-[0.58rem] uppercase tracking-[0.04em] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:text-xs sm:tracking-[0.08em]",
+                    "relative min-w-0 border-y border-border px-1.5 font-mono text-[0.52rem] uppercase tracking-[0.02em] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-2 sm:text-xs sm:tracking-[0.08em]",
                     viewed
                       ? "bg-surface-2 text-foreground"
                       : clickable
@@ -331,7 +332,7 @@ export function TrialDashboard({
             })}
           </nav>
 
-          <div className="grid min-h-[34rem] lg:grid-cols-[3.25rem_minmax(0,1fr)_15rem]">
+          <div className="grid min-h-[24rem] lg:min-h-[34rem] lg:grid-cols-[3.25rem_minmax(0,1fr)_15rem]">
             <aside
               aria-label="Dashboard navigation"
               className="hidden border-r border-border bg-background py-3 lg:block"
@@ -355,14 +356,14 @@ export function TrialDashboard({
             </aside>
 
             <main className="min-w-0 bg-card p-3 sm:p-5 lg:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+                <div className="min-w-0">
                   <p className="font-mono text-[0.52rem] uppercase tracking-[0.1em] text-primary">
                     {isLive
                       ? `Phase 0${displayedView + 1} / ${phases[displayedView].label}`
                       : "Phase 01 / Trial intake"}
                   </p>
-                  <h2 className="mt-2 flex items-center gap-3 text-xl font-semibold tracking-[-0.04em] sm:text-2xl">
+                  <h2 className="mt-2 flex items-center gap-3 text-lg font-semibold tracking-[-0.04em] sm:text-2xl">
                     {failed
                       ? "The trial failed. File the case again."
                       : isLive
@@ -385,7 +386,7 @@ export function TrialDashboard({
                 <button
                   type="button"
                   onClick={returnToIntake}
-                  className="h-9 border border-border bg-background px-3 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-foreground outline-none hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-9 w-full border border-border bg-background px-3 font-mono text-[0.56rem] uppercase tracking-[0.07em] text-foreground outline-none hover:border-primary/60 focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
                 >
                   {intake.hasInput ? "Change input" : "Add GitHub URL"}
                 </button>
@@ -425,7 +426,7 @@ export function TrialDashboard({
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="mt-3 grid grid-cols-3 gap-1 sm:gap-2">
                 <MetricCard label="Evidence" value={String(live.evidenceCount)} />
                 <MetricCard
                   label="Score"
@@ -575,6 +576,16 @@ export function TrialDashboard({
                   label="Worker"
                   value={live.workerSeen ? "Running" : "Not connected"}
                   active={live.workerSeen}
+                />
+                <SystemRow
+                  icon={Zap}
+                  label="AI quota"
+                  value={
+                    live.errorCode?.includes("llm_rate_limited")
+                      ? "Daily limit"
+                      : "Available"
+                  }
+                  active={!live.errorCode?.includes("llm_rate_limited")}
                 />
               </ul>
               <ArchiveRail activeRunId={runId} onSelect={switchRun} />
