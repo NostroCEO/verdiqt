@@ -175,7 +175,21 @@ export async function resolveCurrentAnonymousPrincipal(
   );
 
   if (principalCache.size > PRINCIPAL_CACHE_MAX) {
-    principalCache.clear();
+    const now = Date.now();
+    for (const [key, entry] of principalCache) {
+      if (entry.cachedAt + PRINCIPAL_CACHE_TTL_MS <= now) {
+        principalCache.delete(key);
+      }
+    }
+    if (principalCache.size > PRINCIPAL_CACHE_MAX) {
+      const quarter = Math.ceil(PRINCIPAL_CACHE_MAX / 4);
+      let evicted = 0;
+      for (const key of principalCache.keys()) {
+        if (evicted >= quarter) break;
+        principalCache.delete(key);
+        evicted++;
+      }
+    }
   }
   principalCache.set(currentHash, {
     id: existingSession.id,

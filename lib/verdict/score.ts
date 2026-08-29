@@ -18,7 +18,7 @@ export type DimensionResult = {
   keyFinding: string | null;
 };
 
-const DIMENSION_DEFINITIONS: Record<string, string> = {
+const DIMENSION_DEFINITIONS = {
   PROBLEM_SEVERITY:
     "Is there evidence real people feel this pain? Strong: complaint threads, how-do-I posts, workarounds, negative reviews of adjacent tools. Weak: founder intuition only.",
   DEMAND_SIGNALS:
@@ -76,7 +76,7 @@ function validateCitations(
       return `inline citation [ev:${id}] is not a supplied id`;
     }
   }
-  const citedEvidence = result.evidenceIds.filter((id) => suppliedIds.has(id));
+  const citedEvidence = [...new Set(result.evidenceIds.filter((id) => suppliedIds.has(id)))];
   if (suppliedIds.size >= 2 && result.score > 40 && citedEvidence.length < 2) {
     return "a score above 40 with 2+ relevant items must cite at least 2 evidence ids";
   }
@@ -119,7 +119,7 @@ export async function scoreDimension(
     wrapEvidence(
       "case-idea",
       "CASE_FILE",
-      `${idea.oneLiner} (audience: ${idea.audience}; problem: ${idea.problem})`,
+      `${sanitizeSnippet(idea.oneLiner, 300)} (audience: ${sanitizeSnippet(idea.audience, 200)}; problem: ${sanitizeSnippet(idea.problem, 300)})`,
     ),
     "Grounding passages:",
     ...knowledge.map((passage) =>
@@ -163,7 +163,7 @@ export async function scoreDimension(
     rationale: result.rationale.replace(/\[ev:([^\]]+)\]/g, (token, id: string) =>
       suppliedIds.has(id) || knowledgeIds.has(id) ? token : "",
     ),
-    evidenceIds: result.evidenceIds.filter((id) => suppliedIds.has(id)),
+    evidenceIds: [...new Set(result.evidenceIds.filter((id) => suppliedIds.has(id)))],
   };
 
   if (

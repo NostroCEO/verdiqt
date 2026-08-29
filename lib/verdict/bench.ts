@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { structuredCall } from "@/lib/llm";
-import { wrapEvidence } from "@/lib/sanitize";
+import { sanitizeSnippet, wrapEvidence } from "@/lib/sanitize";
 import type { NormalizedIdea } from "@/lib/evidence/types";
 
 export type BenchInput = {
@@ -43,7 +43,7 @@ export async function benchReview(input: BenchInput): Promise<BenchReview> {
     wrapEvidence(
       "case-idea",
       "CASE_FILE",
-      `${input.idea.oneLiner} Audience: ${input.idea.audience}. Problem: ${input.idea.problem}.`,
+      `${sanitizeSnippet(input.idea.oneLiner, 300)} Audience: ${sanitizeSnippet(input.idea.audience, 200)}. Problem: ${sanitizeSnippet(input.idea.problem, 300)}.`,
     ),
     `Evidence items on file: ${input.evidenceCount}.`,
     "Panel scores:",

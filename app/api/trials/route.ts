@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     const judge = isValidJudgeCookie(cookieStore.get(JUDGE_COOKIE)?.value);
     if (!judge) {
       const ip =
-        request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+        request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ?? "local";
       // Founder decision 2026-08-28: cases are effectively unlimited for
       // humans. The ceiling exists ONLY so a runaway script cannot burn the
       // shared free inference quota that powers everyone's trials; 0 or a

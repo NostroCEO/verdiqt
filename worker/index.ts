@@ -5,10 +5,18 @@ import { startWorker } from "@/lib/worker-boot";
 async function main() {
   const boss = await startWorker();
 
+  let stopping = false;
   const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
     console.log("verdiqt worker stopping");
-    await boss.stop({ graceful: true });
-    process.exit(0);
+    try {
+      await boss.stop({ graceful: true });
+      process.exit(0);
+    } catch (error) {
+      console.error("graceful shutdown failed", error);
+      process.exit(1);
+    }
   };
 
   process.on("SIGTERM", () => void shutdown());

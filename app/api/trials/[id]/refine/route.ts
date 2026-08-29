@@ -53,7 +53,7 @@ export async function POST(
   const judge = isValidJudgeCookie(cookieStore.get(JUDGE_COOKIE)?.value);
   if (!judge) {
     const ip =
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+      request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ?? "local";
     const limit = Number(process.env.RATE_LIMIT_TRIALS_PER_DAY ?? "100");
     if (limit > 0) {
       const { allowed } = await checkRateLimit(hashIp(`trials:${ip}`), limit);

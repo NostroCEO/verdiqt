@@ -30,6 +30,12 @@ import { DIMENSIONS, validateWeights, DEFAULT_WEIGHTS } from "@/lib/verdict/weig
 
 const LEASE_MINUTES = 5;
 
+class SupersededError extends Error {
+  constructor() {
+    super("superseded");
+  }
+}
+
 type RunContext = {
   runId: string;
   revision: number;
@@ -78,7 +84,8 @@ function makeEmitter(ctx: RunContext): EvidenceEmitter {
 }
 
 // A stale revision must never overwrite a newer result: the guard runs at
-// claim time and again immediately before the terminal write.
+// claim time, between stages, inside the per-dimension loop, and again
+// immediately before the terminal write.
 async function isSuperseded(ctx: RunContext) {
   const trial = await prisma.trial.findUnique({
     where: { id: ctx.trialId },
@@ -92,6 +99,13 @@ async function markSuperseded(ctx: RunContext) {
     where: { id: ctx.runId },
     data: { status: PipelineRunStatus.SUPERSEDED, completedAt: new Date() },
   });
+}
+
+async function checkSuperseded(ctx: RunContext) {
+  if (await isSuperseded(ctx)) {
+    await markSuperseded(ctx);
+    throw new SupersededError();
+  }
 }
 
 async function stageNormalize(
@@ -189,6 +203,8 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
   const rationales = {} as Record<Dimension, string>;
 
   for (const dimension of DIMENSIONS) {
+    await checkSuperseded(ctx);
+
     // Ten strongest items are plenty for one dimension's scoring prompt;
     // larger prompts were blowing through the free tier's per-minute token
     // window across six back-to-back calls (observed live 2026-08-28).
@@ -377,11 +393,15 @@ export async function runPipeline(pipelineRunId: string) {
     const idea = await stageNormalize(ctx, run.trial);
 
     if (run.kind !== PipelineRunKind.RESCORE) {
+      await checkSuperseded(ctx);
       await stageGatherAndClassify(ctx, idea);
     }
 
+    await checkSuperseded(ctx);
     await stageScoreAndCompose(ctx, idea);
   } catch (error) {
+    if (error instanceof SupersededError) return;
+
     const current = await prisma.trial.findUnique({
       where: { id: run.trialId },
       select: { status: true },
