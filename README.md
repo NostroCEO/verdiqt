@@ -66,16 +66,18 @@ Environment variables:
 | `JUDGE_ACCESS_CODE` | Optional: code that exchanges for a cookie bypassing the daily trial limit |
 | `GITHUB_TOKEN` | Optional: raises GitHub API quota |
 | `PRODUCT_HUNT_TOKEN` | Optional: enables the Product Hunt source |
-| `RATE_LIMIT_TRIALS_PER_DAY` | Optional: abuse ceiling per IP, default 100 |
+| `RATE_LIMIT_TRIALS_PER_DAY` | Optional: per-IP daily trial ceiling, default 100 (0 disables) |
+| `RATE_LIMIT_TRIALS_GLOBAL_PER_DAY` | Optional: global daily trial ceiling across all anonymous users, protects the shared inference quota; default 0 (disabled). Judges with the code bypass it |
+| `NEXT_PUBLIC_GITHUB_OAUTH_ENABLED` | Optional: when `true`, registers the two GitHub-portfolio tools (`list_repos`, `rank_portfolio`); default off |
 
 ## Architecture
 
-Zero-budget topology — the whole product runs on free tiers:
+Zero-budget topology — built to free-tier constraints, running on Render participant credits:
 
-- One free Render web container runs Next.js 15 **and** the pg-boss pipeline worker, colocated via the Next instrumentation hook (`instrumentation-node.ts`), which also applies migrations and ingests the knowledge corpus at boot.
+- One Render web container runs Next.js 15 **and** the pg-boss pipeline worker, colocated via the Next instrumentation hook (`instrumentation-node.ts`), which also applies migrations and ingests the knowledge corpus at boot.
 - Inference is Groq free tier (`openai/gpt-oss-120b`) through the OpenAI-compatible API; 429s are waited out and retried, schema violations get one repair retry, then a typed failure.
 - Evidence comes from free public APIs behind a Postgres-backed response cache with per-source TTLs. No scraping.
-- Prisma pools are capped at 6 + 3 and pg-boss at 4 — 13 worst-case connections against free Postgres's ~95.
+- The Prisma pool is capped at 6 and pg-boss at 4 — 10 worst-case connections, well under the database's ceiling.
 - In-process micro-caches (2s) collapse poll bursts on status routes; a retention sweep keeps the database bounded.
 - Retrieval is Postgres full-text search (`websearch_to_tsquery`, OR-phrase fallback, dimension-tag backfill) over a 12-file validation-methodology corpus in `content/brain/` — no paid embeddings.
 - Anonymous privacy: a 256-bit capability cookie (only its SHA-256 hash is stored) with a 30-day sliding expiry isolates each visitor's history; the design was adversarially audited.
