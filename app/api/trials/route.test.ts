@@ -28,6 +28,15 @@ vi.mock("@/lib/judge", async (importOriginal) => {
 import { POST } from "@/app/api/trials/route";
 
 const originalPublicTrialsEnabled = process.env.PUBLIC_TRIALS_ENABLED;
+const originalGlobalLimit = process.env.RATE_LIMIT_TRIALS_GLOBAL_PER_DAY;
+
+function restoreEnv(key: string, original: string | undefined) {
+  if (original === undefined) {
+    delete process.env[key];
+    return;
+  }
+  process.env[key] = original;
+}
 
 function trialRequest(body: unknown) {
   return new Request("http://localhost/api/trials", {
@@ -44,12 +53,8 @@ describe("POST /api/trials", () => {
     mocks.checkRateLimit.mockReset();
     mocks.isValidJudgeCookie.mockReset();
 
-    if (originalPublicTrialsEnabled === undefined) {
-      delete process.env.PUBLIC_TRIALS_ENABLED;
-      return;
-    }
-
-    process.env.PUBLIC_TRIALS_ENABLED = originalPublicTrialsEnabled;
+    restoreEnv("PUBLIC_TRIALS_ENABLED", originalPublicTrialsEnabled);
+    restoreEnv("RATE_LIMIT_TRIALS_GLOBAL_PER_DAY", originalGlobalLimit);
   });
 
   it("rejects invalid JSON before any launch-gated work can run", async () => {
@@ -122,6 +127,36 @@ describe("POST /api/trials", () => {
     const judged = await POST(trialRequest({ ideaText: "an idea" }));
     expect(judged.status).toBe(202);
     expect(mocks.checkRateLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it("enforces the global daily ceiling after the per-IP limit and lets judges bypass it", async () => {
+    process.env.PUBLIC_TRIALS_ENABLED = "true";
+    process.env.RATE_LIMIT_TRIALS_GLOBAL_PER_DAY = "25";
+    mocks.cookies.mockResolvedValue({ get: vi.fn(), set: vi.fn() });
+    mocks.isValidJudgeCookie.mockReturnValue(false);
+    // Per-IP passes, then the shared global ceiling rejects.
+    mocks.checkRateLimit
+      .mockResolvedValueOnce({ allowed: true, count: 3 })
+      .mockResolvedValueOnce({ allowed: false, count: 26 });
+
+    const limited = await POST(trialRequest({ ideaText: "an idea" }));
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toMatchObject({ error: "rate_limited" });
+    expect(mocks.checkRateLimit).toHaveBeenCalledTimes(2);
+    expect(mocks.startTrial).not.toHaveBeenCalled();
+
+    // The judge cookie bypasses both the per-IP limit and the global ceiling.
+    mocks.checkRateLimit.mockClear();
+    mocks.isValidJudgeCookie.mockReturnValue(true);
+    mocks.startTrial.mockResolvedValue({
+      run_id: "t2",
+      status: "QUEUED",
+      dashboard_url: "/trial/t2",
+    });
+
+    const judged = await POST(trialRequest({ ideaText: "an idea" }));
+    expect(judged.status).toBe(202);
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
   });
 
   it("starts a queued trial through the shared service when the launch gate is open", async () => {

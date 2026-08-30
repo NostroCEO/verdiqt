@@ -134,6 +134,35 @@ export async function POST(request: Request) {
           );
         }
       }
+
+      // Global daily ceiling on the SHARED free inference quota. The per-IP
+      // limit above cannot protect it: every trial, from any IP, draws the
+      // same Groq daily pool, so a spread of IPs (organic or bot) can drain
+      // the day's inference before judges arrive. This bounds TOTAL anonymous
+      // trials/day across everyone. Judges with the code bypass it entirely.
+      // Checked AFTER the per-IP limit so a single IP can consume at most
+      // RATE_LIMIT_TRIALS_PER_DAY of the global budget. 0 or unset disables it
+      // (default), so this is inert until set for the judging window.
+      const globalLimit = Number(
+        process.env.RATE_LIMIT_TRIALS_GLOBAL_PER_DAY ?? "0",
+      );
+      if (globalLimit > 0) {
+        const { allowed } = await checkRateLimit(
+          hashIp("trials:global"),
+          globalLimit,
+        );
+
+        if (!allowed) {
+          return NextResponse.json(
+            {
+              error: "rate_limited",
+              retry_hint:
+                "The court's daily docket is full. Proceedings resume at midnight UTC.",
+            },
+            { status: 429 },
+          );
+        }
+      }
     }
     const trial = await startTrial({ ...parsed.data, cookieStore });
 
