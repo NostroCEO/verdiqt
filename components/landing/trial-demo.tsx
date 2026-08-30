@@ -344,7 +344,7 @@ export function TrialDashboard({
             })}
           </nav>
 
-          <div className="grid min-h-[24rem] lg:min-h-[34rem] lg:grid-cols-[3.25rem_minmax(0,1fr)_15rem]">
+          <div className="grid grid-cols-1 min-h-[24rem] lg:min-h-[34rem] lg:grid-cols-[3.25rem_minmax(0,1fr)_15rem]">
             <aside
               aria-label="Dashboard navigation"
               className="hidden border-r border-border bg-background py-3 lg:block"
@@ -420,7 +420,7 @@ export function TrialDashboard({
                     {intake.hasInput ? "Input ready" : "Waiting"}
                   </span>
                 </div>
-                <div className="grid gap-px bg-border sm:grid-cols-[minmax(0,1fr)_10rem]">
+                <div className="grid grid-cols-1 gap-px bg-border sm:grid-cols-[minmax(0,1fr)_10rem]">
                   <div className="min-w-0 bg-background p-3">
                     <p className="truncate text-sm font-semibold">{intake.caseLabel}</p>
                     <p className="mt-1 truncate font-mono text-[0.52rem] text-muted-foreground sm:text-[0.58rem]">

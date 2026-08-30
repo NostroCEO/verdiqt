@@ -87,7 +87,17 @@ export function CourtroomIntake() {
           },
         }),
       );
-      router.replace("/trial?run=" + encodeURIComponent(submission.runId));
+      // Carry the case metadata in the URL, not just the run id: re-filing a
+      // second case must leave the case file (label, source, input type)
+      // correct on its own, without depending on the event reaching the
+      // already-mounted dashboard.
+      const liveParams = new URLSearchParams({
+        run: submission.runId,
+        case: submission.caseName,
+        source: trimmed,
+        type: mode,
+      });
+      router.replace("/trial?" + liveParams.toString());
       return;
     }
 

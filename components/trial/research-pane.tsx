@@ -82,7 +82,7 @@ export function ResearchPane({
           The trial failed during this phase. {explainErrorCode(errorCode)}
         </p>
       ) : null}
-      <div className="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[16rem_minmax(0,1fr)]">
       <div>
         <p className="mb-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
           The procedure
