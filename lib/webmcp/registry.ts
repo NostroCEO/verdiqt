@@ -46,6 +46,9 @@ export type ModelContext = {
   removeEventListener?: (type: "toolchange", listener: () => void) => void;
 };
 
+// The full documented tool contract. Every tool's route + input schema is
+// validated in tests against this list, regardless of what a given deployment
+// registers.
 export const webmcpTools: ModelContextTool[] = [
   startValidationTool,
   getValidationStatusTool,
@@ -60,6 +63,20 @@ export const webmcpTools: ModelContextTool[] = [
   rankPortfolioTool,
   searchKnowledgeTool,
 ];
+
+// The tools actually registered with the browser and shown in the on-page
+// docket. list_repos and rank_portfolio require GitHub OAuth (listing a user's
+// repos / ranking their portfolio); OAuth is disabled in the hosted demo, so
+// they are gated out — an agent and the docket only ever see tools that
+// actually work. This keeps the WebMCP-leverage story honest: no dead tools on
+// the tie-breaking criterion. They return automatically when
+// NEXT_PUBLIC_GITHUB_OAUTH_ENABLED is "true".
+export const activeTools: ModelContextTool[] =
+  process.env.NEXT_PUBLIC_GITHUB_OAUTH_ENABLED === "true"
+    ? webmcpTools
+    : webmcpTools.filter(
+        (tool) => tool !== listReposTool && tool !== rankPortfolioTool,
+      );
 
 export function getModelContext(): ModelContext | null {
   if (typeof document === "undefined") {

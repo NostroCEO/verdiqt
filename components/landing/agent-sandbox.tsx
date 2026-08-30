@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
 import {
   getAgentChannelSnapshot,
@@ -9,7 +9,7 @@ import {
   subscribeAgentChannel,
   type AgentChannelSnapshot,
 } from "@/lib/webmcp/bus";
-import { webmcpTools } from "@/lib/webmcp/registry";
+import { activeTools } from "@/lib/webmcp/registry";
 import { cn } from "@/lib/utils";
 
 // [04] AGENT ACCESS. Landing chrome for the real tool registry: the docket
@@ -46,6 +46,84 @@ function statusDetail(state: AgentChannelSnapshot["state"]) {
 
 function formatTime(at: number) {
   return new Date(at).toLocaleTimeString("en-GB", { hour12: false });
+}
+
+const AGENT_PROMPT =
+  "Open this page and put my SaaS idea on trial using the tools registered here, then show me the verdict: [your idea].";
+
+// Activation guidance: the tools register in ANY WebMCP-enabled browser, shown
+// as the two clients that support it today. Capability-framed, not an
+// allowlist — a future WebMCP browser works with no change. Copy has a
+// clipboard fallback so a blocked/insecure context still hands over the text.
+function AgentActivation() {
+  const [copied, setCopied] = useState<"idle" | "ok" | "manual">("idle");
+
+  async function copyPrompt() {
+    try {
+      await navigator.clipboard.writeText(AGENT_PROMPT);
+      setCopied("ok");
+    } catch {
+      // Insecure context or a browser that blocks the Clipboard API: fall back
+      // to telling the human to select the text, which is always selectable.
+      setCopied("manual");
+    }
+  }
+
+  return (
+    <div className="border-b border-border/90 px-6 py-8 sm:px-10">
+      <p className="font-mono text-[0.62rem] uppercase tracking-[0.12em] text-muted-foreground">
+        Turn the agent on
+      </p>
+      <p className="mt-2 max-w-[42rem] text-sm leading-6 text-foreground/80">
+        The tools below register in any WebMCP-enabled browser. Two support it
+        today:
+      </p>
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="border border-border bg-background p-4">
+          <p className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-primary">
+            In ChatGPT
+          </p>
+          <p className="mt-2 text-xs leading-5 text-foreground/80">
+            Open this page in ChatGPT&apos;s in-app browser, then paste this
+            into the chat:
+          </p>
+          <p className="mt-3 select-all border border-border/70 bg-surface px-3 py-2 font-mono text-[0.68rem] leading-relaxed text-foreground/90">
+            {AGENT_PROMPT}
+          </p>
+          <button
+            type="button"
+            onClick={copyPrompt}
+            className="cut-action mt-3 inline-flex h-8 items-center gap-2 border border-primary/50 bg-primary/10 px-3 font-mono text-[0.62rem] uppercase tracking-[0.08em] text-primary transition-colors hover:bg-primary/20 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {copied === "ok" ? (
+              <>
+                <Check className="size-3" /> Copied
+              </>
+            ) : (
+              "Copy prompt"
+            )}
+          </button>
+          {copied === "manual" ? (
+            <p className="mt-2 font-mono text-[0.58rem] uppercase tracking-[0.06em] text-muted-foreground">
+              Copy blocked — select the text above and copy it.
+            </p>
+          ) : null}
+        </div>
+        <div className="border border-border bg-background p-4">
+          <p className="font-mono text-[0.6rem] uppercase tracking-[0.1em] text-primary">
+            In Chrome 149+
+          </p>
+          <p className="mt-2 text-xs leading-5 text-foreground/80">
+            Enable the experimental flag, then reload — the tools register
+            automatically and any WebMCP agent surface can call them.
+          </p>
+          <p className="mt-3 select-all border border-border/70 bg-surface px-3 py-2 font-mono text-[0.68rem] leading-relaxed text-foreground/90">
+            chrome://flags/#enable-webmcp-testing
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function AgentSandbox() {
@@ -105,9 +183,11 @@ export function AgentSandbox() {
         </div>
       </div>
 
+      <AgentActivation />
+
       <div className="grid lg:grid-cols-[1.6fr_1fr]">
         <ol className="border-border/90 lg:border-r">
-          {webmcpTools.map((tool, index) => {
+          {activeTools.map((tool, index) => {
             const open = openTool === tool.name;
             const failed = snapshot.failedTools.includes(tool.name);
             const readOnly = tool.annotations?.readOnlyHint === true;

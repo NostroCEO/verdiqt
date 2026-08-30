@@ -2,7 +2,7 @@ import Ajv from "ajv";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ModelContext, ModelContextTool } from "@/lib/webmcp/registry";
-import { registerAllTools, webmcpTools } from "@/lib/webmcp/registry";
+import { activeTools, registerAllTools, webmcpTools } from "@/lib/webmcp/registry";
 import { startValidationTool } from "@/lib/webmcp/tools/start-validation";
 
 const expectedToolNames = [
@@ -28,6 +28,18 @@ describe("WebMCP registry", () => {
 
   it("exports exactly the documented 12 tools", () => {
     expect(webmcpTools.map((tool) => tool.name)).toEqual(expectedToolNames);
+  });
+
+  it("gates the OAuth-only portfolio tools out of the active set by default", () => {
+    // NEXT_PUBLIC_GITHUB_OAUTH_ENABLED is unset in tests, so the two tools that
+    // need GitHub OAuth are excluded from what actually registers and displays.
+    const activeNames = activeTools.map((tool) => tool.name);
+    expect(activeNames).not.toContain("list_repos");
+    expect(activeNames).not.toContain("rank_portfolio");
+    expect(activeTools).toHaveLength(webmcpTools.length - 2);
+    // Everything else stays: analyze_repo works on public repos, no OAuth.
+    expect(activeNames).toContain("analyze_repo");
+    expect(activeNames).toContain("start_validation");
   });
 
   it("compiles every input schema as JSON Schema", () => {

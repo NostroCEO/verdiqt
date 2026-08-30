@@ -9,6 +9,13 @@ import { WeightsPanel } from "@/components/trial/weights-panel";
 import type { LiveTrialState } from "@/lib/hooks/use-trial-live";
 import { cn, safeHttpUrl } from "@/lib/utils";
 
+// A daily-quota exhaustion is not a crash — it is an intentional pause. The
+// courtroom stays in character: the docket is full, proceedings resume. Both
+// the shared inference quota and the global trial ceiling surface as this.
+export function isRecess(code: string | null): boolean {
+  return code != null && code.includes("llm_rate_limited");
+}
+
 // Human explanations for the pipeline's typed error codes.
 export function explainErrorCode(code: string | null): string {
   if (!code) return "File the case again; every stage reports its progress.";
@@ -86,7 +93,9 @@ export function VerdictPane({
         ) : (
           <p className="mt-3 text-sm text-foreground">
             {live.status === "FAILED"
-              ? "The trial failed before a verdict was reached."
+              ? isRecess(live.errorCode)
+                ? "The court is in recess."
+                : "The trial failed before a verdict was reached."
               : "The court is deliberating."}
           </p>
         )}

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Gavel } from "lucide-react";
 
+import { AgentPill } from "@/components/agent-pill";
 import { Badge } from "@/components/ui/badge";
 
 // Shared sticky header. Links are absolute so they work from any route.
@@ -35,10 +36,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <span className="hidden items-center gap-2 text-xs font-medium text-muted-foreground sm:inline-flex">
-            <span className="size-1.5 rounded-full bg-build shadow-[0_0_12px_var(--build)]" />
-            Build in progress
-          </span>
+          <AgentPill />
           <Badge variant="outline" className="border-border/90 bg-background font-mono text-[0.62rem] tracking-[0.08em]">
             Human-led
           </Badge>

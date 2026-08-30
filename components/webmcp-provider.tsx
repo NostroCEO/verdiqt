@@ -9,7 +9,7 @@ import {
 import {
   getModelContext,
   registerAllTools,
-  webmcpTools,
+  activeTools,
   type ModelContext,
 } from "@/lib/webmcp/registry";
 
@@ -30,7 +30,7 @@ export function WebMCPProvider() {
     let pollTimer: number | null = null;
     let toolchangeContext: ModelContext | null = null;
 
-    const totalCount = webmcpTools.length;
+    const totalCount = activeTools.length;
 
     async function refreshNativeCount(modelContext: ModelContext) {
       if (typeof modelContext.getTools !== "function") return;
@@ -39,7 +39,7 @@ export function WebMCPProvider() {
         const native = await modelContext.getTools();
         if (cancelled || !Array.isArray(native)) return;
 
-        const ourNames = new Set(webmcpTools.map((tool) => tool.name));
+        const ourNames = new Set(activeTools.map((tool) => tool.name));
         const nativeCount = native.filter((tool) => {
           const name =
             typeof tool === "object" && tool !== null
@@ -74,7 +74,7 @@ export function WebMCPProvider() {
 
       const results = await registerAllTools(
         modelContext,
-        webmcpTools,
+        activeTools,
         controller.signal,
       );
 
