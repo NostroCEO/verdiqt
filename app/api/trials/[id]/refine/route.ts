@@ -1,4 +1,4 @@
-import { Actor, PipelineRunKind, TrialStatus } from "@prisma/client";
+import { Actor, HumanState, PipelineRunKind, TrialStatus } from "@prisma/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -82,6 +82,36 @@ export async function POST(
       },
       select: { id: true },
     });
+
+    // The court's memory along the case lineage (founder directive
+    // 2026-08-31): evidence the HUMAN pinned on the parent follows the
+    // refinement. Only pinned items carry — human-vouched relevance, not the
+    // whole gather — fresh gathering adds everything else, and the
+    // (trialId, fingerprint) unique key plus the gather stage's
+    // humanState-preserving upsert keep carried pins intact on re-discovery.
+    const pinned = await tx.evidence.findMany({
+      where: { trialId: parent.id, humanState: HumanState.PINNED },
+      select: {
+        source: true,
+        url: true,
+        title: true,
+        snippet: true,
+        dimension: true,
+        strength: true,
+        fingerprint: true,
+      },
+    });
+    if (pinned.length > 0) {
+      await tx.evidence.createMany({
+        data: pinned.map((item) => ({
+          ...item,
+          trialId: trial.id,
+          humanState: HumanState.PINNED,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     const run = await tx.pipelineRun.create({
       data: {
         trialId: trial.id,

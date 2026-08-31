@@ -188,7 +188,7 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
 
   const trial = await prisma.trial.findUnique({
     where: { id: ctx.trialId },
-    select: { weights: true },
+    select: { weights: true, parentTrialId: true },
   });
   const weights = validateWeights(trial?.weights)
     ? (trial?.weights as DimensionScores)
@@ -283,6 +283,28 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
     payload: { revision: ctx.revision, stage: "BENCH_REVIEW" },
   }).catch(() => {});
 
+  // Lineage context for the bench: a refinement is judged against the ruling
+  // the court already delivered on its parent (same-session by construction —
+  // refine requires an owned parent). Missing/incomplete parent = no context.
+  const parent = trial?.parentTrialId
+    ? await prisma.trial.findUnique({
+        where: { id: trial.parentTrialId },
+        select: {
+          verdict: true,
+          compositeScore: true,
+          normalizedIdea: { select: { oneLiner: true } },
+        },
+      })
+    : null;
+  const priorCase =
+    parent?.verdict && parent.compositeScore !== null
+      ? {
+          oneLiner: parent.normalizedIdea?.oneLiner ?? "the prior case",
+          verdict: parent.verdict,
+          compositeScore: parent.compositeScore,
+        }
+      : null;
+
   const bench = await benchReview({
     idea,
     dimensions: DIMENSIONS.map((dimension) => ({
@@ -292,6 +314,7 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
     })),
     mathComposite: composed.compositeScore,
     evidenceCount: allEvidence.length,
+    priorCase,
   }).catch((error: unknown) => {
     console.error("bench review failed", error);
     return null;

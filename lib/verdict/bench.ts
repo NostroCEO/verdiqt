@@ -9,6 +9,13 @@ export type BenchInput = {
   dimensions: Array<{ dimension: string; score: number; rationale: string }>;
   mathComposite: number;
   evidenceCount: number;
+  // Set when this case refines a prior case in the same session's lineage:
+  // the bench judges the refinement against the ruling it already delivered.
+  priorCase?: {
+    oneLiner: string;
+    verdict: string;
+    compositeScore: number;
+  } | null;
 };
 
 export type BenchReview = {
@@ -47,6 +54,11 @@ export async function benchReview(input: BenchInput): Promise<BenchReview> {
       `${sanitizeSnippet(input.idea.oneLiner, 300)} Audience: ${sanitizeSnippet(input.idea.audience, 200)}. Problem: ${sanitizeSnippet(input.idea.problem, 300)}.`,
     ),
     `Evidence items on file: ${input.evidenceCount}.`,
+    ...(input.priorCase
+      ? [
+          `Lineage: this case refines a prior case this court already ruled on — "${sanitizeSnippet(input.priorCase.oneLiner, 200)}" (${input.priorCase.verdict} at ${input.priorCase.compositeScore}/100). Judge whether the refinement addressed what the prior ruling faulted; credit real improvement, and say so in the opinion.`,
+        ]
+      : []),
     "Panel scores:",
     ...input.dimensions.map(
       (entry) =>
