@@ -79,7 +79,9 @@ function isDailyExhaustion(error: unknown): boolean {
     typeof error === "object" && error !== null && "message" in error
       ? String((error as { message?: unknown }).message).toLowerCase()
       : "";
-  if (/per day|tpd|rpd|daily/.test(message)) return true;
+  // Groq spells it "per day"/"TPD"/"RPD"; Gemini's OpenAI-compat layer embeds
+  // quota ids like "...PerDayPerProjectPerModel" / "per_day" with no space.
+  if (/per day|per_day|perday|tpd|rpd|daily/.test(message)) return true;
 
   const headers =
     typeof error === "object" && error !== null && "headers" in error
