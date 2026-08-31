@@ -11,7 +11,11 @@ import {
   StackOverflowMark,
 } from "@/components/icons/brand-icons";
 import { StageChecklist } from "@/components/trial/stage-checklist";
-import { DeliberationBoard, explainErrorCode } from "@/components/trial/verdict-pane";
+import {
+  countEvidenceByDimension,
+  DeliberationBoard,
+  explainErrorCode,
+} from "@/components/trial/verdict-pane";
 import type {
   LiveEvidenceItem,
   LiveScoredDimension,
@@ -102,7 +106,10 @@ export function ResearchPane({
             <p className="mb-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
               The deliberation
             </p>
-            <DeliberationBoard scoredDimensions={scoredDimensions} />
+            <DeliberationBoard
+              scoredDimensions={scoredDimensions}
+              evidenceCounts={countEvidenceByDimension(evidence)}
+            />
           </div>
         ) : null}
       </div>

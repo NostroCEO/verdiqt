@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Scale } from "lucide-react";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 
 import { LiveVerdictPanel, scoreToneClass } from "@/components/landing/live-verdict-panel";
 import { WeightsPanel } from "@/components/trial/weights-panel";
@@ -62,6 +62,77 @@ const DELIBERATION_ORDER = [
   ["BUILD_COST", "Build cost"],
 ] as const;
 
+// The judge's monologue (founder request 2026-08-31, Claude-style rotating
+// status text) — every line narrates a REAL step of scoreDimension: the
+// judge receives the strongest exhibits, gets grounding passages from the
+// validation corpus, and must write a cited rationale. Thin evidence -> the
+// judgment-based path, said out loud. No invented dialogue; the honesty
+// story extends to the loading state.
+function judgeMonologue(label: string, exhibitCount: number): string[] {
+  const lower = label.toLowerCase();
+  return [
+    exhibitCount >= 2
+      ? `Reviewing ${exhibitCount} exhibits on ${lower}`
+      : `Few exhibits on ${lower}. Weighing domain judgment`,
+    "Consulting the validation corpus",
+    "Weighing the strongest signals",
+    "Writing the rationale and citations",
+  ];
+}
+
+const BENCH_MONOLOGUE = [
+  "Reading all six rationales",
+  "Weighing the panel against the case file",
+  "Writing the final ruling",
+];
+
+// What each judge actually receives: non-rejected items for their dimension.
+export function countEvidenceByDimension(
+  evidence: Array<{ dimension: string; humanState: string }>,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of evidence) {
+    if (item.humanState === "REJECTED") continue;
+    counts[item.dimension] = (counts[item.dimension] ?? 0) + 1;
+  }
+  return counts;
+}
+
+// Rotating status line, Claude-monologue style: crossfades to the next
+// phrase every few seconds. Purely presentational cycling over truthful
+// phrases; the row's presence/absence stays driven by real pipeline state.
+function Monologue({ phrases }: { phrases: string[] }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => setIndex((current) => (current + 1) % phrases.length),
+      2_600,
+    );
+    return () => window.clearInterval(timer);
+  }, [phrases.length]);
+
+  return (
+    <span className="inline-flex min-w-0 justify-end overflow-hidden text-right">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={phrases[index % phrases.length]}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: [1, 0.55, 1], y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{
+            opacity: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
+            y: { duration: 0.25 },
+          }}
+          className="truncate font-mono text-[0.6rem] uppercase tracking-[0.08em] text-primary"
+        >
+          {phrases[index % phrases.length]}…
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
 // The live deliberation board (founder request 2026-08-31: monitor the steps
 // between the judges instead of a long opaque wait). Every row is REAL state:
 // scored rows show the score the moment its DimensionScore row lands, the
@@ -72,9 +143,13 @@ const DELIBERATION_ORDER = [
 // procedure rail both mount it, so the user sees it wherever they wait.
 export function DeliberationBoard({
   scoredDimensions,
+  evidenceCounts = {},
   className,
 }: {
   scoredDimensions: Array<{ dimension: string; score: number }>;
+  // Non-rejected evidence per dimension, so the monologue's exhibit count is
+  // the number the judge actually receives (top 8 by strength).
+  evidenceCounts?: Record<string, number>;
   className?: string;
 }) {
   const byDimension = new Map(
@@ -112,13 +187,12 @@ export function DeliberationBoard({
                 {scored.score}
               </motion.span>
             ) : active ? (
-              <motion.span
-                animate={{ opacity: [1, 0.35, 1] }}
-                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-                className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-primary"
-              >
-                Deliberating
-              </motion.span>
+              <Monologue
+                phrases={judgeMonologue(
+                  label,
+                  Math.min(evidenceCounts[dimension] ?? 0, 8),
+                )}
+              />
             ) : (
               <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
                 Waiting
@@ -137,13 +211,7 @@ export function DeliberationBoard({
           The bench · final ruling
         </span>
         {allScored ? (
-          <motion.span
-            animate={{ opacity: [1, 0.35, 1] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-            className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-primary"
-          >
-            Reviewing the case file
-          </motion.span>
+          <Monologue phrases={BENCH_MONOLOGUE} />
         ) : (
           <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
             Awaits the panel
@@ -210,6 +278,7 @@ export function VerdictPane({
         {deliberating ? (
           <DeliberationBoard
             scoredDimensions={live.scoredDimensions}
+            evidenceCounts={countEvidenceByDimension(live.evidence)}
             className="mx-auto mt-5 max-w-[24rem]"
           />
         ) : null}
