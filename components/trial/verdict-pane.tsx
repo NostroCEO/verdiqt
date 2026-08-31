@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ChevronDown, Scale } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { LiveVerdictPanel, scoreToneClass } from "@/components/landing/live-verdict-panel";
 import { WeightsPanel } from "@/components/trial/weights-panel";
@@ -103,6 +103,7 @@ export function countEvidenceByDimension(
 // phrases; the row's presence/absence stays driven by real pipeline state.
 function Monologue({ phrases }: { phrases: string[] }) {
   const [index, setIndex] = useState(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     const timer = window.setInterval(
@@ -112,21 +113,31 @@ function Monologue({ phrases }: { phrases: string[] }) {
     return () => window.clearInterval(timer);
   }, [phrases.length]);
 
+  const phrase = phrases[index % phrases.length];
+
+  // Full-width line that WRAPS instead of truncating: on a phone the phrase
+  // gets its own row under the judge's name, never squeezed against it.
   return (
-    <span className="inline-flex min-w-0 justify-end overflow-hidden text-right">
+    <span className="block overflow-hidden">
       <AnimatePresence mode="wait" initial={false}>
         <motion.span
-          key={phrases[index % phrases.length]}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: [1, 0.55, 1], y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{
-            opacity: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
-            y: { duration: 0.25 },
-          }}
-          className="truncate font-mono text-[0.6rem] uppercase tracking-[0.08em] text-primary"
+          key={phrase}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+          animate={
+            reduceMotion ? { opacity: 1 } : { opacity: [1, 0.55, 1], y: 0 }
+          }
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+          transition={
+            reduceMotion
+              ? { duration: 0.2 }
+              : {
+                  opacity: { duration: 2.4, repeat: Infinity, ease: "easeInOut" },
+                  y: { duration: 0.25 },
+                }
+          }
+          className="block font-mono text-[0.6rem] uppercase leading-4 tracking-[0.08em] text-primary"
         >
-          {phrases[index % phrases.length]}…
+          {phrase}…
         </motion.span>
       </AnimatePresence>
     </span>
@@ -161,62 +172,83 @@ export function DeliberationBoard({
   const allScored = firstPending === -1;
 
   return (
-    <ul className={cn("w-full border border-border/70 text-left", className)}>
+    <ul
+      aria-label="Deliberation progress"
+      className={cn("w-full border border-border/70 text-left", className)}
+    >
       {DELIBERATION_ORDER.map(([dimension, label], index) => {
         const scored = byDimension.get(dimension);
         const active = !scored && index === firstPending;
         return (
           <li
             key={dimension}
-            className="flex min-h-9 items-center gap-3 border-b border-border/60 px-3 py-1.5"
-          >
-            <span
-              className={cn(
-                "min-w-0 flex-1 truncate font-mono text-[0.62rem] uppercase tracking-[0.08em]",
-                scored ? "text-foreground" : active ? "text-foreground" : "text-muted-foreground/60",
-              )}
-            >
-              {label}
-            </span>
-            {scored ? (
-              <motion.span
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={cn("font-mono text-xs", scoreToneClass(scored.score))}
-              >
-                {scored.score}
-              </motion.span>
-            ) : active ? (
-              <Monologue
-                phrases={judgeMonologue(
-                  label,
-                  Math.min(evidenceCounts[dimension] ?? 0, 8),
-                )}
-              />
-            ) : (
-              <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
-                Waiting
-              </span>
+            className={cn(
+              "border-b border-border/60 px-3 py-2",
+              active && "border-l-2 border-l-primary bg-primary/5",
             )}
+          >
+            <div className="flex min-h-5 items-center gap-3">
+              <span
+                className={cn(
+                  "min-w-0 flex-1 truncate font-mono text-[0.62rem] uppercase tracking-[0.08em]",
+                  scored || active ? "text-foreground" : "text-muted-foreground/60",
+                )}
+              >
+                {label}
+              </span>
+              {scored ? (
+                <motion.span
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn("font-mono text-xs", scoreToneClass(scored.score))}
+                >
+                  {scored.score}
+                </motion.span>
+              ) : active ? null : (
+                <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
+                  Waiting
+                </span>
+              )}
+            </div>
+            {active ? (
+              <div className="mt-1">
+                <Monologue
+                  phrases={judgeMonologue(
+                    label,
+                    Math.min(evidenceCounts[dimension] ?? 0, 8),
+                  )}
+                />
+              </div>
+            ) : null}
           </li>
         );
       })}
-      <li className="flex min-h-9 items-center gap-3 px-3 py-1.5">
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate font-mono text-[0.62rem] uppercase tracking-[0.08em]",
-            allScored ? "text-foreground" : "text-muted-foreground/60",
-          )}
-        >
-          The bench · final ruling
-        </span>
-        {allScored ? (
-          <Monologue phrases={BENCH_MONOLOGUE} />
-        ) : (
-          <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
-            Awaits the panel
-          </span>
+      <li
+        className={cn(
+          "px-3 py-2",
+          allScored && "border-l-2 border-l-primary bg-primary/5",
         )}
+      >
+        <div className="flex min-h-5 items-center gap-3">
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate font-mono text-[0.62rem] uppercase tracking-[0.08em]",
+              allScored ? "text-foreground" : "text-muted-foreground/60",
+            )}
+          >
+            The bench · final ruling
+          </span>
+          {allScored ? null : (
+            <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
+              Awaits the panel
+            </span>
+          )}
+        </div>
+        {allScored ? (
+          <div className="mt-1">
+            <Monologue phrases={BENCH_MONOLOGUE} />
+          </div>
+        ) : null}
       </li>
     </ul>
   );
