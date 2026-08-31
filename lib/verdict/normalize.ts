@@ -31,26 +31,15 @@ export async function normalizeIdea(input: {
   let user: string;
 
   if (input.repoUrl) {
-    let brief;
-    try {
-      brief = await fetchRepoBrief(input.repoUrl);
-    } catch (error) {
-      if (error instanceof Error && error.message === "invalid_repo_url") {
-        throw error;
-      }
-      // GitHub can rate-limit unauthenticated cloud IPs; the repository
-      // NAME is still real data, so normalization degrades to it instead
-      // of failing the whole trial.
-      const slug = input.repoUrl.replace(/^https?:\/\/(www\.)?github\.com\//, "");
-      brief = {
-        name: slug,
-        description: "",
-        readmeExcerpt: "",
-        language: "",
-        topics: [],
-        stars: 0,
-      };
-    }
+    // A failed brief fetch FAILS the trial with its typed error instead of
+    // inventing a case file from the repo name. The invented analysis was
+    // persisted as the trial's NormalizedIdea and reused on every revision
+    // (founder bug 2026-08-31: "the second case has a nonsense first context
+    // analysis" — GitHub rate-limits the shared cloud IP right after a first
+    // case's research). explainErrorCode already renders github_http_403/429
+    // as a clear retry-in-a-minute message; honest failure beats confident
+    // hallucination in a validation product.
+    const brief = await fetchRepoBrief(input.repoUrl);
     // Cached briefs from before the wider shape may lack these fields.
     const topics = brief.topics ?? [];
     const metaLine = [

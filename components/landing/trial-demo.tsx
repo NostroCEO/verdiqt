@@ -235,10 +235,23 @@ export function TrialDashboard({
 
   const displayedView = isLive ? (chosenView ?? activePhase) : 0;
 
-  function switchRun(nextRunId: string) {
+  // Reopening an archived case must swap the LABEL with the data: without
+  // setIntake here, the header kept the previous case's name over the newly
+  // selected run's live content (founder bug 2026-08-31, "mixes up cases").
+  function switchRun(nextRunId: string, caseLabel?: string) {
     setRunId(nextRunId);
     setChosenView(null);
-    router.replace("/trial?run=" + encodeURIComponent(nextRunId));
+    if (caseLabel) {
+      setIntake({
+        caseLabel: cleanLabel(caseLabel, "Untitled case", 64),
+        sourceLabel: "Reopened from the archive",
+        inputType: inferInputType(caseLabel),
+        hasInput: true,
+      });
+    }
+    const params = new URLSearchParams({ run: nextRunId });
+    if (caseLabel) params.set("case", caseLabel);
+    router.replace("/trial?" + params.toString());
   }
 
   function returnToIntake() {

@@ -116,6 +116,14 @@ export function useTrialLive(runId: string | null): LiveTrialState {
     let source: EventSource | null = null;
     const encoded = encodeURIComponent(runId);
 
+    // Founder bug 2026-08-31: filing a second case mixed the two cases'
+    // contexts. Root cause: staleness was only checked after `fetch()` —
+    // never after `response.json()` — so a response that straddled the run
+    // switch wrote the OLD run's payload into the NEW run's state. The
+    // controller aborts in-flight requests (including body reads) on switch,
+    // and every parse is followed by a cancelled re-check.
+    const controller = new AbortController();
+
     async function fetchVerdictDetails() {
       if (verdictFetched) return;
       verdictFetched = true;
@@ -123,6 +131,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
         const response = await fetch(`/api/trials/${encoded}/verdict`, {
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         });
         if (cancelled || !response.ok) return;
         const body = (await response.json()) as {
@@ -141,6 +150,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             bench_confidence?: number;
           } | null;
         };
+        if (cancelled) return;
         setState((current) => ({
           ...current,
           dimensions: body.dimensions.map((entry) => ({
@@ -166,6 +176,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
         const response = await fetch(`/api/trials/${encoded}/evidence`, {
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         });
         if (cancelled || !response.ok) return;
         const body = (await response.json()) as {
@@ -180,6 +191,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             human_state: string;
           }>;
         };
+        if (cancelled) return;
         setState((current) => ({
           ...current,
           evidence: mergeEvidenceById(
@@ -206,6 +218,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
         const response = await fetch(`/api/trials/${encoded}/status`, {
           cache: "no-store",
           credentials: "include",
+          signal: controller.signal,
         });
         if (cancelled) return;
 
@@ -215,6 +228,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
         }
 
         const body = (await response.json()) as {
+          run_id?: string;
           status: TrialStatusValue;
           evidence_count: number;
           composite_score: number | null;
@@ -235,6 +249,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
             dimension: string | null;
           }>;
         };
+
+        // Body parsed AFTER the run may have switched; re-check, and refuse a
+        // payload the server stamped for a different run.
+        if (cancelled) return;
+        if (body.run_id && body.run_id !== runId) return;
 
         statusRef.current = body.status;
         setState((current) => ({
@@ -315,6 +334,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
 
     source = new EventSource(`/api/trials/${encoded}/stream`);
     source.onmessage = (message) => {
+      if (cancelled) return;
       try {
         const event = JSON.parse(message.data) as { kind?: string };
         if (event.kind === "stage_started") {
@@ -337,6 +357,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
 
     return () => {
       cancelled = true;
+      controller.abort();
       clearInterval(statusTimer);
       clearInterval(evidenceTimer);
       source?.close();

@@ -27,7 +27,7 @@ export function ArchiveRail({
   onSelect,
 }: {
   activeRunId: string | null;
-  onSelect: (runId: string) => void;
+  onSelect: (runId: string, caseLabel: string) => void;
 }) {
   const [cases, setCases] = useState<ArchivedCase[]>([]);
 
@@ -38,6 +38,7 @@ export function ArchiveRail({
       .then(async (response) => {
         if (cancelled || !response.ok) return;
         const body = (await response.json()) as { trials: ArchivedCase[] };
+        if (cancelled) return;
         setCases(body.trials);
       })
       .catch(() => {
@@ -66,7 +67,7 @@ export function ArchiveRail({
           <li key={entry.run_id}>
             <button
               type="button"
-              onClick={() => onSelect(entry.run_id)}
+              onClick={() => onSelect(entry.run_id, entry.case_label)}
               className="flex w-full items-center gap-2 border border-transparent px-1.5 py-1 text-left transition-colors hover:border-border hover:bg-surface focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <span className="min-w-0 flex-1 truncate text-[0.68rem] text-foreground">
