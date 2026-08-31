@@ -73,6 +73,32 @@ describe("scoreDimension", () => {
     expect(result.rationale).toContain("insufficient");
   });
 
+  it("floors at 40 with fewer than 2 usable items - thin evidence is unproven, not negative", async () => {
+    mocks.structuredCall.mockResolvedValue({
+      score: 20,
+      rationale: "No concrete signal found.",
+      evidenceIds: [],
+    });
+
+    const result = await scoreDimension(idea, "DISTRIBUTION", [evidenceItem("e1")], []);
+
+    expect(result.score).toBe(40);
+    expect(result.rationale).toContain("unproven");
+  });
+
+  it("passes a score already inside the 40-45 uncertainty band through unchanged", async () => {
+    mocks.structuredCall.mockResolvedValue({
+      score: 42,
+      rationale: "Thin but plausible [ev:e1].",
+      evidenceIds: ["e1"],
+    });
+
+    const result = await scoreDimension(idea, "DISTRIBUTION", [evidenceItem("e1")], []);
+
+    expect(result.score).toBe(42);
+    expect(result.rationale).not.toContain("unproven");
+  });
+
   it("retries once on ghost citations, then sanitizes instead of failing", async () => {
     mocks.structuredCall
       .mockResolvedValueOnce({ score: 70, rationale: "cites ghost [ev:zz]", evidenceIds: ["zz"] })
