@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { GitHubMark } from "@/components/icons/brand-icons";
 import { SITE } from "@/lib/site";
 
 // Shared footer: one of exactly two status surfaces on the site
@@ -13,11 +14,12 @@ export function SiteFooter() {
           <span>{SITE.license} licensed</span>
           {SITE.repoUrl ? (
             <a
-              className="transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
               href={SITE.repoUrl}
               rel="noreferrer"
               target="_blank"
             >
+              <GitHubMark className="size-3.5" />
               Source
             </a>
           ) : null}
