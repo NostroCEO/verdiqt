@@ -68,9 +68,17 @@ const DELIBERATION_ORDER = [
 // active judge pulses, and the bench row explains the final gap after 6/6
 // while Judge 2 reads the whole case file. Serial scoring follows this same
 // order, so the first unscored row is the judge currently deliberating.
-function DeliberationBoard({ live }: { live: LiveTrialState }) {
+// Shared: the verdict pane's deliberating state AND the research pane's
+// procedure rail both mount it, so the user sees it wherever they wait.
+export function DeliberationBoard({
+  scoredDimensions,
+  className,
+}: {
+  scoredDimensions: Array<{ dimension: string; score: number }>;
+  className?: string;
+}) {
   const byDimension = new Map(
-    live.scoredDimensions.map((entry) => [entry.dimension, entry]),
+    scoredDimensions.map((entry) => [entry.dimension, entry]),
   );
   const firstPending = DELIBERATION_ORDER.findIndex(
     ([dimension]) => !byDimension.has(dimension),
@@ -78,7 +86,7 @@ function DeliberationBoard({ live }: { live: LiveTrialState }) {
   const allScored = firstPending === -1;
 
   return (
-    <ul className="mx-auto mt-5 w-full max-w-[24rem] border border-border/70 text-left">
+    <ul className={cn("w-full border border-border/70 text-left", className)}>
       {DELIBERATION_ORDER.map(([dimension, label], index) => {
         const scored = byDimension.get(dimension);
         const active = !scored && index === firstPending;
@@ -199,7 +207,12 @@ export function VerdictPane({
               ? "Each judge delivers their score as they finish; the bench rules last."
               : "The verdict unlocks the moment scoring completes."}
         </p>
-        {deliberating ? <DeliberationBoard live={live} /> : null}
+        {deliberating ? (
+          <DeliberationBoard
+            scoredDimensions={live.scoredDimensions}
+            className="mx-auto mt-5 max-w-[24rem]"
+          />
+        ) : null}
       </div>
     );
   }

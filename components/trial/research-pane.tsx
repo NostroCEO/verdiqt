@@ -11,8 +11,11 @@ import {
   StackOverflowMark,
 } from "@/components/icons/brand-icons";
 import { StageChecklist } from "@/components/trial/stage-checklist";
-import { explainErrorCode } from "@/components/trial/verdict-pane";
-import type { LiveEvidenceItem } from "@/lib/hooks/use-trial-live";
+import { DeliberationBoard, explainErrorCode } from "@/components/trial/verdict-pane";
+import type {
+  LiveEvidenceItem,
+  LiveScoredDimension,
+} from "@/lib/hooks/use-trial-live";
 import type { TrialStatusValue } from "@/lib/trial-progress";
 import { cn, safeHttpUrl } from "@/lib/utils";
 
@@ -45,6 +48,7 @@ export function ResearchPane({
   status,
   evidence,
   sourceStates = {},
+  scoredDimensions = [],
   runId = null,
   errorCode = null,
   failedAtStage = null,
@@ -52,6 +56,7 @@ export function ResearchPane({
   status: TrialStatusValue;
   evidence: LiveEvidenceItem[];
   sourceStates?: Record<string, { state: string; count: number }>;
+  scoredDimensions?: LiveScoredDimension[];
   runId?: string | null;
   errorCode?: string | null;
   failedAtStage?: string | null;
@@ -88,6 +93,18 @@ export function ResearchPane({
           The procedure
         </p>
         <StageChecklist status={status} failedAtStage={failedAtStage} />
+        {status === "SCORING" ? (
+          // The investigation is closed but the user is still HERE: mirror
+          // the live deliberation in the procedure rail so the scoring wait
+          // is watchable without switching to the verdict phase (founder
+          // request 2026-08-31).
+          <div className="mt-4">
+            <p className="mb-2 font-mono text-[0.52rem] uppercase tracking-[0.08em] text-muted-foreground">
+              The deliberation
+            </p>
+            <DeliberationBoard scoredDimensions={scoredDimensions} />
+          </div>
+        ) : null}
       </div>
 
       <div className="min-w-0">

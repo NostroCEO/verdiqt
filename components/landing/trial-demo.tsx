@@ -507,6 +507,7 @@ export function TrialDashboard({
                         status={live.status}
                         evidence={live.evidence}
                         sourceStates={live.sourceStates}
+                        scoredDimensions={live.scoredDimensions}
                         runId={runId}
                         errorCode={live.errorCode}
                         failedAtStage={live.failedAtStage}
