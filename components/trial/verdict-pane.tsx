@@ -103,7 +103,9 @@ export function VerdictPane({
           {live.status === "FAILED"
             ? explainErrorCode(live.errorCode)
             : deliberating
-              ? "Scoring the six dimensions and consulting the bench."
+              ? live.dimensionsScored > 0
+                ? `${Math.min(live.dimensionsScored, 6)} of 6 dimensions scored. The free inference tier paces the court; deliberation continues.`
+                : "Scoring the six dimensions and consulting the bench."
               : "The verdict unlocks the moment scoring completes."}
         </p>
       </div>

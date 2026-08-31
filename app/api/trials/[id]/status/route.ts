@@ -99,7 +99,7 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
       verdict: true,
       createdAt: true,
       completedAt: true,
-      _count: { select: { evidence: true } },
+      _count: { select: { evidence: true, scores: true } },
       normalizedIdea: {
         select: {
           oneLiner: true,
@@ -202,6 +202,10 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
     completed_revision: trial.completedRevision,
     stages_done: completedStages(trial.status),
     evidence_count: trial._count.evidence,
+    // Scoring progress: DimensionScore rows upsert one by one during the
+    // SCORING stage, so this count turns "deliberating" into visible motion
+    // (0..6) instead of a minutes-long silent wait under Groq rate limits.
+    dimensions_scored: trial._count.scores,
     composite_score: trial.compositeScore,
     verdict: trial.verdict,
     pending_approvals: trial.approvals.map((approval) => ({

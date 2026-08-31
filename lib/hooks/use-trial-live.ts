@@ -32,6 +32,7 @@ export type LiveEvidenceItem = {
 export type LiveTrialState = {
   status: TrialStatusValue;
   evidenceCount: number;
+  dimensionsScored: number;
   evidence: LiveEvidenceItem[];
   compositeScore: number | null;
   verdict: string | null;
@@ -65,6 +66,7 @@ export type LiveTrialState = {
 const initialState: LiveTrialState = {
   status: null,
   evidenceCount: 0,
+  dimensionsScored: 0,
   evidence: [],
   compositeScore: null,
   verdict: null,
@@ -231,6 +233,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           run_id?: string;
           status: TrialStatusValue;
           evidence_count: number;
+          dimensions_scored?: number;
           composite_score: number | null;
           verdict: string | null;
           error_code?: string | null;
@@ -260,6 +263,7 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           ...current,
           status: body.status,
           evidenceCount: body.evidence_count,
+          dimensionsScored: body.dimensions_scored ?? 0,
           compositeScore: body.composite_score,
           verdict: body.verdict,
           errorCode: body.error_code ?? null,
