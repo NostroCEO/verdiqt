@@ -53,6 +53,99 @@ export function explainErrorCode(code: string | null): string {
   return `The trial failed: ${code.replaceAll("_", " ")}`;
 }
 
+const DELIBERATION_ORDER = [
+  ["PROBLEM_SEVERITY", "Problem severity"],
+  ["DEMAND_SIGNALS", "Demand signals"],
+  ["COMPETITION", "Competition"],
+  ["MONETIZATION", "Monetization"],
+  ["DISTRIBUTION", "Distribution"],
+  ["BUILD_COST", "Build cost"],
+] as const;
+
+// The live deliberation board (founder request 2026-08-31: monitor the steps
+// between the judges instead of a long opaque wait). Every row is REAL state:
+// scored rows show the score the moment its DimensionScore row lands, the
+// active judge pulses, and the bench row explains the final gap after 6/6
+// while Judge 2 reads the whole case file. Serial scoring follows this same
+// order, so the first unscored row is the judge currently deliberating.
+function DeliberationBoard({ live }: { live: LiveTrialState }) {
+  const byDimension = new Map(
+    live.scoredDimensions.map((entry) => [entry.dimension, entry]),
+  );
+  const firstPending = DELIBERATION_ORDER.findIndex(
+    ([dimension]) => !byDimension.has(dimension),
+  );
+  const allScored = firstPending === -1;
+
+  return (
+    <ul className="mx-auto mt-5 w-full max-w-[24rem] border border-border/70 text-left">
+      {DELIBERATION_ORDER.map(([dimension, label], index) => {
+        const scored = byDimension.get(dimension);
+        const active = !scored && index === firstPending;
+        return (
+          <li
+            key={dimension}
+            className="flex min-h-9 items-center gap-3 border-b border-border/60 px-3 py-1.5"
+          >
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate font-mono text-[0.62rem] uppercase tracking-[0.08em]",
+                scored ? "text-foreground" : active ? "text-foreground" : "text-muted-foreground/60",
+              )}
+            >
+              {label}
+            </span>
+            {scored ? (
+              <motion.span
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={cn("font-mono text-xs", scoreToneClass(scored.score))}
+              >
+                {scored.score}
+              </motion.span>
+            ) : active ? (
+              <motion.span
+                animate={{ opacity: [1, 0.35, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+                className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-primary"
+              >
+                Deliberating
+              </motion.span>
+            ) : (
+              <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
+                Waiting
+              </span>
+            )}
+          </li>
+        );
+      })}
+      <li className="flex min-h-9 items-center gap-3 px-3 py-1.5">
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate font-mono text-[0.62rem] uppercase tracking-[0.08em]",
+            allScored ? "text-foreground" : "text-muted-foreground/60",
+          )}
+        >
+          The bench · final ruling
+        </span>
+        {allScored ? (
+          <motion.span
+            animate={{ opacity: [1, 0.35, 1] }}
+            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+            className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-primary"
+          >
+            Reviewing the case file
+          </motion.span>
+        ) : (
+          <span className="font-mono text-[0.6rem] uppercase tracking-[0.08em] text-muted-foreground/50">
+            Awaits the panel
+          </span>
+        )}
+      </li>
+    </ul>
+  );
+}
+
 // Phase 3: deliberation state while scoring, then the real charts plus the
 // RAG-grounded rationale accordion with [ev:id] citations.
 export function VerdictPane({
@@ -103,11 +196,10 @@ export function VerdictPane({
           {live.status === "FAILED"
             ? explainErrorCode(live.errorCode)
             : deliberating
-              ? live.dimensionsScored > 0
-                ? `${Math.min(live.dimensionsScored, 6)} of 6 dimensions scored. The free inference tier paces the court; deliberation continues.`
-                : "Scoring the six dimensions and consulting the bench."
+              ? "Each judge delivers their score as they finish; the bench rules last."
               : "The verdict unlocks the moment scoring completes."}
         </p>
+        {deliberating ? <DeliberationBoard live={live} /> : null}
       </div>
     );
   }

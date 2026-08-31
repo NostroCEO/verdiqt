@@ -29,10 +29,17 @@ export type LiveEvidenceItem = {
   humanState: string;
 };
 
+export type LiveScoredDimension = {
+  dimension: string;
+  score: number;
+  keyFinding: string | null;
+};
+
 export type LiveTrialState = {
   status: TrialStatusValue;
   evidenceCount: number;
   dimensionsScored: number;
+  scoredDimensions: LiveScoredDimension[];
   evidence: LiveEvidenceItem[];
   compositeScore: number | null;
   verdict: string | null;
@@ -67,6 +74,7 @@ const initialState: LiveTrialState = {
   status: null,
   evidenceCount: 0,
   dimensionsScored: 0,
+  scoredDimensions: [],
   evidence: [],
   compositeScore: null,
   verdict: null,
@@ -234,6 +242,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           status: TrialStatusValue;
           evidence_count: number;
           dimensions_scored?: number;
+          scored_dimensions?: Array<{
+            dimension: string;
+            score: number;
+            key_finding: string | null;
+          }>;
           composite_score: number | null;
           verdict: string | null;
           error_code?: string | null;
@@ -264,6 +277,11 @@ export function useTrialLive(runId: string | null): LiveTrialState {
           status: body.status,
           evidenceCount: body.evidence_count,
           dimensionsScored: body.dimensions_scored ?? 0,
+          scoredDimensions: (body.scored_dimensions ?? []).map((entry) => ({
+            dimension: entry.dimension,
+            score: entry.score,
+            keyFinding: entry.key_finding,
+          })),
           compositeScore: body.composite_score,
           verdict: body.verdict,
           errorCode: body.error_code ?? null,

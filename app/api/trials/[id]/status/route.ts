@@ -100,6 +100,7 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
       createdAt: true,
       completedAt: true,
       _count: { select: { evidence: true, scores: true } },
+      scores: { select: { dimension: true, score: true, keyFinding: true } },
       normalizedIdea: {
         select: {
           oneLiner: true,
@@ -206,6 +207,14 @@ async function buildStatusBody(id: string, anonymousSessionId: string) {
     // SCORING stage, so this count turns "deliberating" into visible motion
     // (0..6) instead of a minutes-long silent wait under Groq rate limits.
     dimensions_scored: trial._count.scores,
+    // The deliberation board: each judge's delivered score, live as it lands,
+    // so the UI can show real per-dimension verdicts filling in instead of a
+    // spinner (founder request 2026-08-31).
+    scored_dimensions: (trial.scores ?? []).map((entry) => ({
+      dimension: entry.dimension,
+      score: entry.score,
+      key_finding: entry.keyFinding,
+    })),
     composite_score: trial.compositeScore,
     verdict: trial.verdict,
     pending_approvals: trial.approvals.map((approval) => ({
