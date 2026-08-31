@@ -72,9 +72,15 @@ export async function fetchApi(path: string, options: ApiRequestOptions): Promis
     return response.json();
   }
 
+  // A non-JSON answer is almost always transient (the host restarting during
+  // a deploy, a proxy interstitial). The hint must tell the AGENT to retry —
+  // agents act on this text, and the old "goes live when the backend deploys"
+  // wording made them give up on a ten-second blip (observed live 2026-08-31
+  // during a rolling deploy).
   return {
     error: "api_unavailable",
     status: response.status,
-    hint: "This capability goes live when the validation backend deploys. Poll get_validation_status for current trial state.",
+    retryable: true,
+    hint: "The backend did not answer with JSON - it is likely restarting and will be back within seconds. Wait ~10 seconds and retry this exact call; if it persists, poll get_validation_status.",
   };
 }
