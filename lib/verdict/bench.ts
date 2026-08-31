@@ -24,10 +24,18 @@ export type BenchReview = {
   compositeAdjustment: number;
 };
 
+// Same truncate-not-fail posture as the panel schema: a long opinion is
+// clipped, an out-of-band adjustment is clamped into ±8 in code. Structural
+// violations still fail (and fall back to the panel result).
 const benchSchema = z.object({
-  opinion: z.string().min(1).max(700),
+  opinion: z
+    .string()
+    .min(1)
+    .transform((value) => (value.length > 900 ? `${value.slice(0, 900)}…` : value)),
   confidence: z.number().int().min(0).max(100),
-  composite_adjustment: z.number().int().min(-8).max(8),
+  composite_adjustment: z
+    .number()
+    .transform((value) => Math.max(-8, Math.min(8, Math.round(value)))),
 });
 
 const SYSTEM_PROMPT = [

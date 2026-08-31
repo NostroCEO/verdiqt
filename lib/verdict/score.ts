@@ -33,11 +33,22 @@ const DIMENSION_DEFINITIONS = {
     "Estimated effort against realistic payoff. Strong: MVP in days with a clear wedge. Weak: months of infra before first value, heavy compliance.",
 };
 
+// Length overruns TRUNCATE instead of failing (founder bug 2026-08-31: the
+// judgment prompts made judges more thorough, a rationale overran the old
+// max(1200), and the whole trial died on llm_schema_violation). Schema
+// failures are reserved for structural problems - missing fields, wrong
+// types - where the repair retry can actually help.
 const resultSchema = z.object({
   score: z.number().int().min(0).max(100),
-  rationale: z.string().min(1).max(1200),
-  evidenceIds: z.array(z.string()).max(24),
-  key_finding: z.string().max(200).optional(),
+  rationale: z
+    .string()
+    .min(1)
+    .transform((value) => (value.length > 2000 ? `${value.slice(0, 2000)}…` : value)),
+  evidenceIds: z.array(z.string()).transform((ids) => ids.slice(0, 24)),
+  key_finding: z
+    .string()
+    .transform((value) => value.slice(0, 200))
+    .optional(),
 });
 
 // The highlighted headline per dimension: the concrete RESULT the evidence
@@ -108,7 +119,7 @@ export async function scoreDimension(
     "Score with BOTH the supplied evidence and your own domain knowledge of this market. When evidence is present, weigh it heavily and cite it inline. When evidence is thin, judge the idea on its merits - category economics, buyer behavior, competitive reality - state plainly in the rationale that the assessment is judgment-based, and name what evidence would confirm or refute it.",
     "Commit to a judgment: do not park scores in the middle out of caution, do not withhold high scores from ideas that earn them, and reserve scores under 40 for cases where evidence or strong reasoning actively argues against the idea.",
     "Evidence marked trusted=\"human-pinned\" was vouched for RELEVANCE by the human, never for truth; weigh it as relevant, not as more credible.",
-    `Return only JSON { "score": 0-100, "rationale": "...", "evidenceIds": ["..."], "key_finding": "..." }. Cite supporting evidence inline as [ev:id] using ONLY the supplied ids.`,
+    `Return only JSON { "score": 0-100, "rationale": "...", "evidenceIds": ["..."], "key_finding": "..." }. Keep the rationale under 900 characters. Cite supporting evidence inline as [ev:id] using ONLY the supplied ids.`,
     `key_finding is the highlighted RESULT in under 120 characters: ${KEY_FINDING_HINTS[dimension] ?? "the concrete result the evidence produced"}. If the evidence shows nothing concrete, key_finding is "No concrete signal found".`,
   ].join(" ");
 
