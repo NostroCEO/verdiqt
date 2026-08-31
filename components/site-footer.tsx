@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { SITE } from "@/lib/site";
 
 // Shared footer: one of exactly two status surfaces on the site
@@ -19,6 +21,9 @@ export function SiteFooter() {
               Source
             </a>
           ) : null}
+          <Link className="transition-colors hover:text-foreground" href="/judge">
+            Judge access
+          </Link>
           <span className="inline-flex items-center gap-2 normal-case tracking-normal">
             <span className="size-1.5 rounded-full bg-build" />
             System build in progress

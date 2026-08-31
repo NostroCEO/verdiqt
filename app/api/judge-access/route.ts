@@ -14,8 +14,11 @@ export async function POST(request: Request) {
   const form = await request.formData().catch(() => null);
   const code = form?.get("code");
 
+  // Last XFF entry = appended by the trusted proxy; the first is
+  // client-supplied and spoofable (same rule as the trials route), so a
+  // brute-forcer cannot rotate fake headers past the attempt limit.
   const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
+    request.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ?? "local";
   const { allowed } = await checkRateLimit(
     hashIp(`judge:${ip}`),
     EXCHANGE_ATTEMPTS_PER_DAY,
@@ -32,7 +35,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_code" }, { status: 401 });
   }
 
-  const response = NextResponse.redirect(new URL("/trial", request.url), 303);
+  // Relative Location, resolved by the browser against the PUBLIC origin.
+  // Building an absolute URL from request.url broke behind Render's proxy:
+  // the internal origin is localhost:10000, and judges were redirected there
+  // (founder bug report 2026-08-31).
+  const response = new NextResponse(null, {
+    status: 303,
+    headers: { Location: "/trial" },
+  });
   response.cookies.set(JUDGE_COOKIE, mintJudgeCookieValue(), {
     httpOnly: true,
     sameSite: "lax",
