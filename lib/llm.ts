@@ -20,6 +20,42 @@ const globalForLlm = globalThis as typeof globalThis & {
   verdiqtLlm?: OpenAI;
 };
 
+// Gemini's OpenAI-compat layer wraps error bodies in an ARRAY
+// ([{"error": ...}]), which the OpenAI SDK cannot parse — every provider
+// error surfaced as the useless "404 status code (no body)" and masked the
+// real message (observed live 2026-08-31: a model-gating message hid behind
+// it for hours). Unwrap at the fetch layer so errorCode carries the truth.
+async function unwrappingFetch(
+  url: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+): Promise<Response> {
+  const response = await fetch(url, init);
+  if (response.ok) return response;
+
+  const text = await response.text();
+  let body = text;
+  const trimmed = text.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed) && parsed[0] && typeof parsed[0] === "object") {
+        body = JSON.stringify(parsed[0]);
+      }
+    } catch {
+      // Not JSON after all; pass the original body through.
+    }
+  }
+
+  const headers = new Headers(response.headers);
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export function getLlmClient() {
   if (!globalForLlm.verdiqtLlm) {
     const apiKey = process.env.INFERENCE_API_KEY;
@@ -33,6 +69,7 @@ export function getLlmClient() {
       baseURL: process.env.INFERENCE_BASE_URL ?? INFERENCE_DEFAULTS.baseURL,
       timeout: INFERENCE_DEFAULTS.timeoutMs,
       maxRetries: INFERENCE_DEFAULTS.maxRetries,
+      fetch: unwrappingFetch,
     });
   }
 
@@ -105,9 +142,18 @@ export async function structuredCall<T>(input: {
   const client = getLlmClient();
   const model = inferenceModel();
 
+  // Thinking models (Gemini 3.x flash) deliberate for ~45s per call at their
+  // default effort — 6+ minutes per trial. INFERENCE_REASONING_EFFORT=low
+  // cut a measured 47s call to 7.7s with equally sharp output
+  // (2026-08-31). Unset = not sent, so Groq-style providers are unaffected.
+  const reasoningEffort = process.env.INFERENCE_REASONING_EFFORT;
+
   const rawRequest = (repairNote?: string) =>
     client.chat.completions.create({
       model,
+      ...(reasoningEffort
+        ? { reasoning_effort: reasoningEffort as "low" | "medium" | "high" }
+        : {}),
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: input.system },
