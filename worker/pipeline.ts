@@ -14,7 +14,7 @@ import { emitEvent } from "@/lib/events";
 import { gatherAll } from "@/lib/evidence/gather";
 import type { EvidenceEmitter, NormalizedIdea } from "@/lib/evidence/types";
 import { retrieveGrounding } from "@/lib/brain/retrieve";
-import { TRIAL_CAPS } from "@/lib/llm";
+import { supportsParallelScoring, TRIAL_CAPS } from "@/lib/llm";
 import { classifyEvidence } from "@/lib/verdict/classify";
 import { benchReview } from "@/lib/verdict/bench";
 import {
@@ -202,9 +202,7 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
   const scores = {} as DimensionScores;
   const rationales = {} as Record<Dimension, string>;
 
-  for (const dimension of DIMENSIONS) {
-    await checkSuperseded(ctx);
-
+  const scoreOneDimension = async (dimension: Dimension) => {
     // Ten strongest items are plenty for one dimension's scoring prompt;
     // larger prompts were blowing through the free tier's per-minute token
     // window across six back-to-back calls (observed live 2026-08-28).
@@ -265,6 +263,25 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
         evidenceIds: result.evidenceIds,
       },
     });
+  };
+
+  if (supportsParallelScoring()) {
+    // Opt-in (INFERENCE_PARALLEL_SCORING=true, paid/high-RPM tiers only):
+    // all six judges deliberate at once and scoring drops from ~50s to ~10s.
+    // One superseded check up front; the pre-terminal check below still
+    // guards the write.
+    await checkSuperseded(ctx);
+    await Promise.all(DIMENSIONS.map((dimension) => scoreOneDimension(dimension)));
+  } else {
+    // Default: serial. Free-tier ceilings (Groq 8k tokens/min; Gemini free
+    // measured at 5 requests/min on the founder's live dashboard) turn six
+    // concurrent prompts into a 429 storm that can exhaust the retry budget
+    // and fail the trial. The wait-and-retry logic paces a serial loop under
+    // any RPM. Per-dimension superseded checks keep stale runs cheap.
+    for (const dimension of DIMENSIONS) {
+      await checkSuperseded(ctx);
+      await scoreOneDimension(dimension);
+    }
   }
 
   const composed = composeVerdict(scores, weights);

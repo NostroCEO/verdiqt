@@ -17,7 +17,7 @@ export const TRIAL_CAPS = {
 } as const;
 
 const globalForLlm = globalThis as typeof globalThis & {
-  verdiqtLlm?: OpenAI;
+  verdiqtLlmClients?: Map<string, OpenAI>;
 };
 
 // Gemini's OpenAI-compat layer wraps error bodies in an ARRAY
@@ -56,28 +56,74 @@ async function unwrappingFetch(
   });
 }
 
-export function getLlmClient() {
-  if (!globalForLlm.verdiqtLlm) {
-    const apiKey = process.env.INFERENCE_API_KEY;
+export type InferenceProvider = {
+  baseURL: string;
+  model: string;
+  apiKey: string;
+};
 
-    if (!apiKey) {
-      throw new Error("INFERENCE_API_KEY is required for inference");
-    }
+// Failover chain (founder decision 2026-08-31): free-tier quotas are
+// per-model pools that drain mid-day, so one provider is never enough for
+// the judging window. The primary is INFERENCE_*; fallbacks come from
+// INFERENCE_FALLBACK_* and INFERENCE_FALLBACK2_* — each needs only _MODEL,
+// and inherits the PRIMARY's base URL and key when its own are unset (so a
+// same-key different-pool fallback like gemini-3.1-flash-lite is one env
+// var). A provider is tried until its quota is exhausted for the day, then
+// the chain advances.
+function configuredProviders(): InferenceProvider[] {
+  const apiKey = process.env.INFERENCE_API_KEY;
+  if (!apiKey) {
+    throw new Error("INFERENCE_API_KEY is required for inference");
+  }
 
-    globalForLlm.verdiqtLlm = new OpenAI({
-      apiKey,
-      baseURL: process.env.INFERENCE_BASE_URL ?? INFERENCE_DEFAULTS.baseURL,
+  const primary: InferenceProvider = {
+    baseURL: process.env.INFERENCE_BASE_URL ?? INFERENCE_DEFAULTS.baseURL,
+    model: inferenceModel(),
+    apiKey,
+  };
+
+  const providers = [primary];
+  for (const prefix of ["INFERENCE_FALLBACK", "INFERENCE_FALLBACK2"]) {
+    const model = process.env[`${prefix}_MODEL`];
+    if (!model) continue;
+    providers.push({
+      baseURL: process.env[`${prefix}_BASE_URL`] ?? primary.baseURL,
+      model,
+      apiKey: process.env[`${prefix}_API_KEY`] ?? primary.apiKey,
+    });
+  }
+
+  return providers;
+}
+
+function clientFor(provider: InferenceProvider): OpenAI {
+  const cache = (globalForLlm.verdiqtLlmClients ??= new Map<string, OpenAI>());
+  const key = `${provider.baseURL}|${provider.apiKey}`;
+  let client = cache.get(key);
+  if (!client) {
+    client = new OpenAI({
+      apiKey: provider.apiKey,
+      baseURL: provider.baseURL,
       timeout: INFERENCE_DEFAULTS.timeoutMs,
       maxRetries: INFERENCE_DEFAULTS.maxRetries,
       fetch: unwrappingFetch,
     });
+    cache.set(key, client);
   }
-
-  return globalForLlm.verdiqtLlm;
+  return client;
 }
 
 export function inferenceModel() {
   return process.env.INFERENCE_MODEL ?? INFERENCE_DEFAULTS.model;
+}
+
+// OPT-IN ONLY (INFERENCE_PARALLEL_SCORING=true): free-tier RPM ceilings
+// (the founder's live Gemini dashboard shows 5 requests/min) make six
+// concurrent scoring calls a 429 storm that can exhaust the retry budget
+// and fail the trial. The serial loop paces itself under any RPM via the
+// wait-and-retry logic. Enable only on a paid or high-RPM tier.
+export function supportsParallelScoring() {
+  return process.env.INFERENCE_PARALLEL_SCORING === "true";
 }
 
 function extractJson(raw: string): unknown {
@@ -139,18 +185,25 @@ export async function structuredCall<T>(input: {
   schema: ZodType<T>;
   schemaName: string;
 }): Promise<T> {
-  const client = getLlmClient();
-  const model = inferenceModel();
+  const providers = configuredProviders();
 
   // Thinking models (Gemini 3.x flash) deliberate for ~45s per call at their
-  // default effort — 6+ minutes per trial. INFERENCE_REASONING_EFFORT=low
-  // cut a measured 47s call to 7.7s with equally sharp output
-  // (2026-08-31). Unset = not sent, so Groq-style providers are unaffected.
-  const reasoningEffort = process.env.INFERENCE_REASONING_EFFORT;
+  // default effort — 6+ minutes per trial (measured live 2026-08-31: 47s vs
+  // 7.7s at low, equally sharp output). Fast is the DEFAULT for gemini-3*
+  // so a missing env var can never recreate the 5-minute trial; the env
+  // overrides it ("none" sends nothing). Non-Gemini providers get nothing
+  // unless explicitly configured.
+  const effortFor = (model: string) => {
+    const configured = process.env.INFERENCE_REASONING_EFFORT;
+    return configured === "none"
+      ? undefined
+      : (configured ?? (model.startsWith("gemini-3") ? "low" : undefined));
+  };
 
-  const rawRequest = (repairNote?: string) =>
-    client.chat.completions.create({
-      model,
+  const rawRequest = (provider: InferenceProvider, repairNote?: string) => {
+    const reasoningEffort = effortFor(provider.model);
+    return clientFor(provider).chat.completions.create({
+      model: provider.model,
       ...(reasoningEffort
         ? { reasoning_effort: reasoningEffort as "low" | "medium" | "high" }
         : {}),
@@ -165,24 +218,53 @@ export async function structuredCall<T>(input: {
         },
       ],
     });
+  };
 
-  const request = async (repairNote?: string) => {
+  // Per-minute 429s are waited out on the SAME provider; daily exhaustion
+  // (or a still-limited final retry) advances the failover chain to the
+  // next provider's separate quota pool. Only when every configured pool is
+  // exhausted does the typed llm_rate_limited failure reach the trial.
+  const requestOnProvider = async (
+    provider: InferenceProvider,
+    repairNote?: string,
+  ) => {
     for (const waitMs of RATE_LIMIT_WAITS_MS) {
       try {
-        return await rawRequest(repairNote);
+        return await rawRequest(provider, repairNote);
       } catch (error) {
         if (!isRateLimit(error)) throw error;
         if (isDailyExhaustion(error)) throw new Error("llm_rate_limited");
-        console.warn(`inference 429; waiting ${waitMs}ms before retrying`);
+        console.warn(
+          `inference 429 on ${provider.model}; waiting ${waitMs}ms before retrying`,
+        );
         await sleep(waitMs);
       }
     }
     try {
-      return await rawRequest(repairNote);
+      return await rawRequest(provider, repairNote);
     } catch (error) {
       if (isRateLimit(error)) throw new Error("llm_rate_limited");
       throw error;
     }
+  };
+
+  const request = async (repairNote?: string) => {
+    let exhausted: Error | null = null;
+    for (const provider of providers) {
+      try {
+        return await requestOnProvider(provider, repairNote);
+      } catch (error) {
+        if (error instanceof Error && error.message === "llm_rate_limited") {
+          exhausted = error;
+          console.warn(
+            `inference quota exhausted on ${provider.model}; advancing failover chain`,
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw exhausted ?? new Error("llm_rate_limited");
   };
 
   const first = await request();
