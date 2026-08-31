@@ -427,7 +427,7 @@ export async function runPipeline(pipelineRunId: string) {
 
     const current = await prisma.trial.findUnique({
       where: { id: run.trialId },
-      select: { status: true },
+      select: { status: true, completedRevision: true },
     });
     const failedAtStage = current?.status !== "FAILED" ? current?.status : null;
     const errorCode = error instanceof Error ? error.message.slice(0, 120) : "unknown";
@@ -440,9 +440,20 @@ export async function runPipeline(pipelineRunId: string) {
         errorCode,
       },
     });
+    // A failed RE-run (deep scan, rescore, refine follow-up) must never bury
+    // a verdict the court already delivered (founder bug 2026-08-31: an
+    // approved deep scan hit an inference outage and the completed trial
+    // flipped to FAILED, hiding its verdict). First-run failures still fail
+    // the trial; failures after a completed revision restore COMPLETE, and
+    // the failed run + trial_failed event keep the honest record.
     await prisma.trial.update({
       where: { id: run.trialId },
-      data: { status: TrialStatus.FAILED },
+      data: {
+        status:
+          current && current.completedRevision > 0
+            ? TrialStatus.COMPLETE
+            : TrialStatus.FAILED,
+      },
     });
     await emitEvent({
       trialId: run.trialId,

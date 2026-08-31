@@ -60,43 +60,30 @@ describe("scoreDimension", () => {
     expect(call.user).not.toContain("e3");
   });
 
-  it("caps at 45 with fewer than 2 usable items and appends the insufficiency note", async () => {
+  it("lets a strong idea score high on judgment when evidence is thin, labeled transparently", async () => {
     mocks.structuredCall.mockResolvedValue({
-      score: 80,
-      rationale: "Looks great [ev:e1].",
+      score: 82,
+      rationale: "Devtools buyers pay for adjacent products; judgment-based given thin public signal [ev:e1].",
       evidenceIds: ["e1"],
     });
 
     const result = await scoreDimension(idea, "MONETIZATION", [evidenceItem("e1")], []);
 
-    expect(result.score).toBe(45);
-    expect(result.rationale).toContain("insufficient");
+    expect(result.score).toBe(82);
+    expect(result.rationale).toContain("domain judgment");
   });
 
-  it("floors at 40 with fewer than 2 usable items - thin evidence is unproven, not negative", async () => {
+  it("lets real negative judgment through when evidence is thin, labeled transparently", async () => {
     mocks.structuredCall.mockResolvedValue({
-      score: 20,
-      rationale: "No concrete signal found.",
+      score: 22,
+      rationale: "Consumers in this category expect free tools; monetization reasoning argues against.",
       evidenceIds: [],
     });
 
     const result = await scoreDimension(idea, "DISTRIBUTION", [evidenceItem("e1")], []);
 
-    expect(result.score).toBe(40);
-    expect(result.rationale).toContain("unproven");
-  });
-
-  it("passes a score already inside the 40-45 uncertainty band through unchanged", async () => {
-    mocks.structuredCall.mockResolvedValue({
-      score: 42,
-      rationale: "Thin but plausible [ev:e1].",
-      evidenceIds: ["e1"],
-    });
-
-    const result = await scoreDimension(idea, "DISTRIBUTION", [evidenceItem("e1")], []);
-
-    expect(result.score).toBe(42);
-    expect(result.rationale).not.toContain("unproven");
+    expect(result.score).toBe(22);
+    expect(result.rationale).toContain("domain judgment");
   });
 
   it("retries once on ghost citations, then sanitizes instead of failing", async () => {
