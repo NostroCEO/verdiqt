@@ -58,12 +58,14 @@ This two-way loop — tools one direction, visible human actions the other — i
 
 ## Testing it (for judges)
 
-The app is always-on — it responds instantly, with no cold-start wait, so the live agent flow works on the first try. A judge access code is provided separately in the submission form; **enter it first at `/judge`**, which sets a cookie that lifts the daily trial ceiling for both your manual clicks and your agent's tool calls. Then test either way below.
+Open **https://verdiqt-web.onrender.com** — no account, no code, no setup. The app is always-on and responds instantly, so the live agent flow works on the first try.
 
-**As a human.** Open https://verdiqt-web.onrender.com, go to `/trial`, and file a case — any SaaS idea in a sentence, or a public GitHub repo URL. Watch the three phases: the normalized case file, evidence streaming in per source (including sources that refuse or are disabled — that visibility is intentional), then the scored verdict with gauge, radar, per-dimension rationale accordions with evidence links, the bench's opinion, and the single recommended next step.
+**As a human.** File a case right from the landing page — any SaaS idea in a sentence, or a public GitHub repo URL. Watch the three phases: the normalized case file, evidence streaming in per source (including sources that refuse or are disabled — that visibility is intentional), then the scored verdict with gauge, radar, per-dimension rationale accordions with evidence links, the bench's opinion, and the single recommended next step.
 
 **As an agent.**
 - *ChatGPT's in-app browser* supports WebMCP out of the box: open the live URL there and ask, "Put this idea on trial: AI changelog writer for indie SaaS teams."
 - *Chrome 149+*: enable `chrome://flags/#enable-webmcp-testing`, restart, open the site, and use any WebMCP-capable agent surface. The registered tools are inspectable in DevTools.
 
 The agent will follow the built-in workflow on its own: `start_validation` → poll `get_validation_status` until `COMPLETE` (about 30 seconds) → `get_verdict`, then `get_evidence` or `get_next_step` for detail. Watch the page while it works — every tool call and pipeline stage is visible there.
+
+In the unlikely event you see a daily-limit message, enter the access code from the submission form at `/judge` — it lifts the trial ceiling for your browser. You should never need it.
