@@ -139,9 +139,26 @@ function extractJson(raw: string): unknown {
 }
 
 const RATE_LIMIT_WAITS_MS = [10_000, 25_000];
+const RETRY_AFTER_MIN_MS = 2_000;
+const RETRY_AFTER_MAX_MS = 20_000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Providers say how long the per-minute window needs in the retry-after
+// header (Groq: typically 2-8s). Honoring it instead of the flat 10s/25s
+// ladder cuts most waits by more than half — the ladder stays as the
+// fallback when the header is absent or unparseable. Clamped so a weird
+// header can neither spin-loop nor stall the serial worker.
+export function retryDelayMs(error: unknown, fallbackMs: number): number {
+  const headers =
+    typeof error === "object" && error !== null && "headers" in error
+      ? (error as { headers?: { get?: (name: string) => string | null } }).headers
+      : undefined;
+  const retryAfter = Number(headers?.get?.("retry-after"));
+  if (!Number.isFinite(retryAfter) || retryAfter <= 0) return fallbackMs;
+  return Math.min(RETRY_AFTER_MAX_MS, Math.max(RETRY_AFTER_MIN_MS, retryAfter * 1_000));
 }
 
 function isRateLimit(error: unknown): boolean {
@@ -234,10 +251,11 @@ export async function structuredCall<T>(input: {
       } catch (error) {
         if (!isRateLimit(error)) throw error;
         if (isDailyExhaustion(error)) throw new Error("llm_rate_limited");
+        const delayMs = retryDelayMs(error, waitMs);
         console.warn(
-          `inference 429 on ${provider.model}; waiting ${waitMs}ms before retrying`,
+          `inference 429 on ${provider.model}; waiting ${delayMs}ms before retrying`,
         );
-        await sleep(waitMs);
+        await sleep(delayMs);
       }
     }
     try {

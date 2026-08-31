@@ -129,11 +129,14 @@ export async function scoreDimension(
       wrapEvidence(`kb-${passage.sourceDoc}-${passage.headingIndex}`, "KNOWLEDGE", passage.content),
     ),
     "Evidence:",
+    // Snippets are capped INSIDE the prompt only (the UI keeps the full
+    // text): six back-to-back scoring prompts must fit the free tier's
+    // per-minute token window, and title + 240 chars carries the signal.
     ...usable.map((item) =>
       wrapEvidence(
         item.id,
         item.source,
-        `${item.title}: ${item.snippet}`,
+        `${item.title}: ${sanitizeSnippet(item.snippet, 240)}`,
         item.humanState === "PINNED" ? "human-pinned" : "false",
       ),
     ),

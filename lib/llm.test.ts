@@ -15,7 +15,7 @@ vi.mock("openai", () => ({
   },
 }));
 
-import { structuredCall } from "@/lib/llm";
+import { retryDelayMs, structuredCall } from "@/lib/llm";
 
 const schema = z.object({ ok: z.boolean() });
 
@@ -114,6 +114,20 @@ describe("structuredCall failover chain", () => {
       structuredCall({ system: "s", user: "u", schema, schemaName: "Test" }),
     ).rejects.toThrow("llm_rate_limited");
     expect(mocks.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("retryDelayMs honors the provider's retry-after header, clamped to sane bounds", () => {
+    const withHeader = (value: string | null) => ({
+      status: 429,
+      headers: { get: (name: string) => (name === "retry-after" ? value : null) },
+    });
+
+    expect(retryDelayMs(withHeader("4"), 10_000)).toBe(4_000);
+    expect(retryDelayMs(withHeader("0.5"), 10_000)).toBe(2_000); // floor
+    expect(retryDelayMs(withHeader("90"), 10_000)).toBe(20_000); // ceiling
+    expect(retryDelayMs(withHeader("garbage"), 10_000)).toBe(10_000); // fallback
+    expect(retryDelayMs(withHeader(null), 25_000)).toBe(25_000); // absent header
+    expect(retryDelayMs({ status: 429 }, 10_000)).toBe(10_000); // no headers at all
   });
 
   it("INFERENCE_REASONING_EFFORT=none strips the effort field even for gemini-3", async () => {

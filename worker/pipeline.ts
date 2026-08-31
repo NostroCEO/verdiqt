@@ -203,13 +203,15 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
   const rationales = {} as Record<Dimension, string>;
 
   const scoreOneDimension = async (dimension: Dimension) => {
-    // Ten strongest items are plenty for one dimension's scoring prompt;
+    // Eight strongest items are plenty for one dimension's scoring prompt;
     // larger prompts were blowing through the free tier's per-minute token
-    // window across six back-to-back calls (observed live 2026-08-28).
+    // window across six back-to-back calls (observed live 2026-08-28;
+    // tightened 10 -> 8 with the 240-char prompt snippet cap 2026-08-31 to
+    // cut 429 waits — the zero-cash speed budget).
     const dimensionEvidence: ScorableEvidence[] = allEvidence
       .filter((row) => row.dimension === dimension)
       .sort((a, b) => b.strength - a.strength)
-      .slice(0, 10)
+      .slice(0, 8)
       .map((row) => ({
         id: row.id,
         humanState: row.humanState,
@@ -224,7 +226,7 @@ async function stageScoreAndCompose(ctx: RunContext, idea: NormalizedIdea) {
     const knowledge = await retrieveGrounding(
       [idea.category, ...idea.keywords],
       [dimension],
-      4,
+      3,
     ).catch((error: unknown) => {
       console.error("knowledge retrieval failed", error);
       return [];
